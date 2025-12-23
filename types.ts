@@ -29,4 +29,5 @@ export interface AppState {
   errorMessage?: string;
   frames: Frame[];
   transitions: VideoTransition[];
+  projectFolder?: string;
 }

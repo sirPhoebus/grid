@@ -40,6 +40,17 @@ Powered by **Gemini 1.5 Pro**, **Veo 3.1**, and **Kling AI**, this application a
 4.  **Open in Browser:**
     Navigate to `http://localhost:5173`
 
+## 5. Local Stable Diffusion Upscaling
+1.  Ensure **Automatic1111 WebUI** is running locally.
+2.  Enable the API flag: `COMMANDLINE_ARGS=--api`.
+3.  Go to **Settings** in GridToVideo Pro.
+4.  Change **Image Upscaling Method** to "Local Stable Diffusion".
+5.  Select **Method**:
+    -   **Upscaler (Extras)**: Traditional resizing (R-ESRGAN).
+    -   **Img2Img (Generative)**: Adds details using "SD Upscale" script. Respects original image aspect ratio. Prompt: "4K, lots of details, hires, HDR, sharp".
+6.  Adjust the **Resize Factor** (e.g., 2x or 3x).
+7.  Save changes.
+
 ## 🛠️ Configuration
 
 Click the **Settings (⚙️)** icon in the top right to:

@@ -2,6 +2,8 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { GeminiService, SupportedAspectRatio } from './services/geminiService';
 import { KlingService } from './services/klingService';
+import { StableDiffusionService } from './services/stableDiffusionService';
+import { ComfyUiService } from './services/comfyUiService';
 import { SettingsModal, AppConfig, ApiProvider } from './components/SettingsModal';
 import { ProcessingStep, Frame, VideoTransition, AppState } from './types';
 
@@ -76,7 +78,10 @@ const App: React.FC = () => {
     provider: 'gemini',
     geminiKey: '',
     klingAccessKey: '',
-    klingSecretKey: ''
+    klingSecretKey: '',
+    upscaler: 'gemini',
+    localUpscaleFactor: 2,
+    localSdMethod: 'extras'
   });
   const [detectedAspectRatio, setDetectedAspectRatio] = useState<SupportedAspectRatio>("1:1");
   const [state, setState] = useState<AppState>({
@@ -156,8 +161,9 @@ const App: React.FC = () => {
           const ctx = canvas.getContext('2d');
           if (!ctx) return reject('Canvas context error');
 
-          const cellW = img.width / 3;
-          const cellH = img.height / 3;
+          const cellW = Math.floor(img.width / 3);
+          const cellH = Math.floor(img.height / 3);
+          const gutter = 4; // Configurable gutter from slice.py
 
           const ratio = cellW / cellH;
           let ar: SupportedAspectRatio = "1:1";
@@ -168,26 +174,68 @@ const App: React.FC = () => {
           setDetectedAspectRatio(ar);
 
           const newFrames: Frame[] = [];
-          const base64Full = img.src.split(',')[1];
-          try {
-            await GeminiService.verifyGridWithNano(base64Full, config.geminiKey);
-          } catch (e) {
-            console.error("Nano verification failed", e);
-          }
+          const savePromises: Promise<any>[] = [];
+
+          // Removed API verification as requested ("instead of going to an API")
+
+          // Generate unique folder name once
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const safeName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_\-]/g, '_');
+          const folderName = `${safeName}_${timestamp}`;
 
           for (let row = 0; row < 3; row++) {
             for (let col = 0; col < 3; col++) {
-              canvas.width = cellW;
-              canvas.height = cellH;
-              ctx.drawImage(img, col * cellW, row * cellH, cellW, cellH, 0, 0, cellW, cellH);
+              // Logic ported from slice.py
+              let left = col * cellW + gutter;
+              let upper = row * cellH + gutter;
+              let right = (col + 1) * cellW - gutter;
+              let lower = (row + 1) * cellH - gutter;
+
+              // Edge adjustments
+              if (col === 0) left = 0;
+              if (col === 2) right = img.width;
+              if (row === 0) upper = 0;
+              if (row === 2) lower = img.height;
+
+              const sourceW = right - left;
+              const sourceH = lower - upper;
+
+              canvas.width = sourceW;
+              canvas.height = sourceH;
+
+              ctx.drawImage(img, left, upper, sourceW, sourceH, 0, 0, sourceW, sourceH);
+
+              const dataUrl = canvas.toDataURL('image/png');
+
               newFrames.push({
                 id: newFrames.length + 1,
-                originalBase64: canvas.toDataURL('image/png'),
+                originalBase64: dataUrl,
                 status: 'pending'
               });
+
+              // Save to local disk via Vite middleware
+              savePromises.push(
+                fetch('/save-slice', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    image: dataUrl,
+                    filename: `tile_${row}_${col}.png`,
+                    folder: folderName
+                  })
+                }).catch(e => {
+                  console.error("Failed to save slice", e);
+                  setState(prev => ({ ...prev, errorMessage: "Failed to save sliced images locally. Ensure dev server was restarted." }));
+                })
+              );
             }
           }
-          setState(prev => ({ ...prev, frames: newFrames }));
+
+
+          // Wait for all saves to complete (best effort, don't block UI strictly if one fails)
+          await Promise.all(savePromises);
+
+          setState(prev => ({ ...prev, frames: newFrames, projectFolder: folderName }));
           resolve();
         };
       };
@@ -210,7 +258,44 @@ const App: React.FC = () => {
           frames: prev.frames.map((f, idx) => idx === i ? { ...f, status: 'processing' } : f)
         }));
 
-        const upscaled = await GeminiService.upscaleFrame(currentFrames[i].originalBase64.split(',')[1], detectedAspectRatio, config.geminiKey);
+        let upscaled: string;
+        if (config.upscaler === 'local_sd') {
+          upscaled = await StableDiffusionService.upscaleFrame(
+            currentFrames[i].originalBase64.split(',')[1],
+            config.localUpscaleFactor || 2,
+            config.localSdMethod || 'extras'
+          );
+        } else if (config.upscaler === 'comfyui') {
+          upscaled = await ComfyUiService.upscaleFrame(
+            currentFrames[i].originalBase64.split(',')[1]
+          );
+        } else {
+          upscaled = await GeminiService.upscaleFrame(
+            currentFrames[i].originalBase64.split(',')[1],
+            detectedAspectRatio,
+            config.geminiKey
+          );
+        }
+
+        // Save upscaled image
+        try {
+          const folderName = stateRef.current.projectFolder || 'default';
+          // Determine row and col from index i
+          const row = Math.floor(i / 3);
+          const col = i % 3;
+          await fetch('/save-slice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              image: upscaled,
+              filename: `tile_${row}_${col}.png`,
+              folder: folderName,
+              targetDir: 'upscale'
+            })
+          });
+        } catch (e) {
+          console.error("Failed to save upscaled image", e);
+        }
 
         if (abortUpscaling.current) return;
 
@@ -266,6 +351,20 @@ const App: React.FC = () => {
     setTimeout(() => {
       newTransitions.forEach((_, i) => runTransitionGeneration(i));
     }, 100);
+  };
+
+  const handleCancelUpscaling = () => {
+    abortUpscaling.current = true;
+    setState(prev => ({
+      ...prev,
+      step: ProcessingStep.SLICING, // Reset to "Ready to Upscale"
+      errorMessage: undefined,
+      // Optional: keep already upscaled frames? 
+      // User might want to re-run or just see what's done. 
+      // If we go back to SLICING (and frames length is 9), UI shows "Start Upscaling".
+      // Let's keep the successfully upscaled ones so they don't lose work, 
+      // but they will re-process if they click start again (unless we optimize processUpscaling to skip completion, which it does: if (status === 'completed') continue)
+    }));
   };
 
   const processVideos = async () => {
@@ -415,12 +514,12 @@ const App: React.FC = () => {
     await sliceImage(file);
   };
 
-  // Auto-start upscaling after slicing
-  useEffect(() => {
-    if (state.step === ProcessingStep.SLICING && state.frames.length === 9) {
-      processUpscaling();
-    }
-  }, [state.step, state.frames.length]);
+  // Auto-start upscaling after slicing - REMOVED per user request
+  // useEffect(() => {
+  //   if (state.step === ProcessingStep.SLICING && state.frames.length === 9) {
+  //     processUpscaling();
+  //   }
+  // }, [state.step, state.frames.length]);
 
   // Auto-start videos after all upscaling completes
   useEffect(() => {
@@ -513,6 +612,22 @@ const App: React.FC = () => {
                   <p className="text-xs text-slate-500">Target format: {detectedAspectRatio}</p>
                 </div>
                 <div className="flex items-center gap-4">
+                  <label className="cursor-pointer text-xs font-bold px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-full border border-slate-700 transition-all shadow-lg flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    New Grid
+                    <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+                  </label>
+
+                  {state.step === ProcessingStep.SLICING && state.frames.length === 9 && (
+                    <button
+                      onClick={processUpscaling}
+                      className="text-xs font-bold px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full border border-indigo-500/50 transition-all shadow-lg animate-bounce-subtle"
+                    >
+                      Start Upscaling →
+                    </button>
+                  )}
                   {state.step === ProcessingStep.UPSCALING && !abortUpscaling.current && (
                     <button
                       onClick={handleSkipUpscaling}
@@ -521,8 +636,16 @@ const App: React.FC = () => {
                       Skip Enhancement → Start Video Generation
                     </button>
                   )}
+                  {state.step === ProcessingStep.UPSCALING && !abortUpscaling.current && (
+                    <button
+                      onClick={handleCancelUpscaling}
+                      className="text-xs font-bold px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-full border border-red-500/30 transition-all shadow-lg"
+                    >
+                      Cancel
+                    </button>
+                  )}
                   <span className="text-xs font-mono px-3 py-1 bg-slate-800 rounded-full text-slate-400 uppercase tracking-widest">
-                    {state.step.replace('_', ' ')}
+                    {state.step === ProcessingStep.SLICING && state.frames.length === 9 ? 'READY TO UPSCALE' : state.step.replace('_', ' ')}
                   </span>
                 </div>
               </div>

@@ -8,6 +8,9 @@ export interface AppConfig {
   geminiKey: string;
   klingAccessKey: string;
   klingSecretKey: string;
+  upscaler: 'gemini' | 'local_sd' | 'comfyui';
+  localUpscaleFactor: number;
+  localSdMethod?: 'extras' | 'img2img';
 }
 
 interface SettingsModalProps {
@@ -59,8 +62,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, c
               <button
                 onClick={() => setLocalConfig(prev => ({ ...prev, provider: 'gemini' }))}
                 className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${localConfig.provider === 'gemini'
-                    ? 'border-indigo-500 bg-indigo-500/10 text-white'
-                    : 'border-slate-700 bg-slate-800 text-slate-400 hover:border-slate-600'
+                  ? 'border-indigo-500 bg-indigo-500/10 text-white'
+                  : 'border-slate-700 bg-slate-800 text-slate-400 hover:border-slate-600'
                   }`}
               >
                 <div className="font-bold">Google Gemini</div>
@@ -70,14 +73,95 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, c
               <button
                 onClick={() => setLocalConfig(prev => ({ ...prev, provider: 'kling' }))}
                 className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${localConfig.provider === 'kling'
-                    ? 'border-indigo-500 bg-indigo-500/10 text-white'
-                    : 'border-slate-700 bg-slate-800 text-slate-400 hover:border-slate-600'
+                  ? 'border-indigo-500 bg-indigo-500/10 text-white'
+                  : 'border-slate-700 bg-slate-800 text-slate-400 hover:border-slate-600'
                   }`}
               >
                 <div className="font-bold">Kling AI</div>
                 <div className="text-xs opacity-70 mt-1">External API</div>
               </button>
             </div>
+          </div>
+
+          <hr className="border-slate-800" />
+
+          {/* Upscaler Selection */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-slate-300">Image Upscaling Method</label>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setLocalConfig(prev => ({ ...prev, upscaler: 'gemini' }))}
+                className={`px-4 py-3 rounded-xl border flex-1 text-sm font-semibold transition-all ${localConfig.upscaler === 'gemini'
+                  ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400'
+                  : 'border-slate-800 text-slate-500 hover:border-slate-700'
+                  }`}
+              >
+                Gemini 3 Pro
+              </button>
+              <button
+                onClick={() => setLocalConfig(prev => ({ ...prev, upscaler: 'local_sd' }))}
+                className={`px-4 py-3 rounded-xl border flex-1 text-sm font-semibold transition-all ${localConfig.upscaler === 'local_sd'
+                  ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400'
+                  : 'border-slate-800 text-slate-500 hover:border-slate-700'
+                  }`}
+              >
+                Local Stable Diffusion
+              </button>
+              <button
+                onClick={() => setLocalConfig(prev => ({ ...prev, upscaler: 'comfyui' }))}
+                className={`px-4 py-3 rounded-xl border flex-1 text-sm font-semibold transition-all ${localConfig.upscaler === 'comfyui'
+                  ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400'
+                  : 'border-slate-800 text-slate-500 hover:border-slate-700'
+                  }`}
+              >
+                ComfyUI
+              </button>
+            </div>
+
+            {localConfig.upscaler === 'local_sd' && (
+              <div className="animate-in fade-in slide-in-from-top-2 pt-2 space-y-4">
+                {/* Method Selection */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-400 uppercase">Method</label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setLocalConfig(prev => ({ ...prev, localSdMethod: 'extras' }))}
+                      className={`px-3 py-2 rounded-lg border text-xs font-medium transition-all flex-1 ${(localConfig.localSdMethod || 'extras') === 'extras'
+                        ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400'
+                        : 'border-slate-800 text-slate-500 hover:border-slate-700'
+                        }`}
+                    >
+                      Upscaler (Extras)
+                    </button>
+                    <button
+                      onClick={() => setLocalConfig(prev => ({ ...prev, localSdMethod: 'img2img' }))}
+                      className={`px-3 py-2 rounded-lg border text-xs font-medium transition-all flex-1 ${localConfig.localSdMethod === 'img2img'
+                        ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400'
+                        : 'border-slate-800 text-slate-500 hover:border-slate-700'
+                        }`}
+                    >
+                      Img2Img (Generative)
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-semibold text-slate-400 uppercase">Resize Factor</label>
+                    <span className="text-xs font-mono text-indigo-400">{localConfig.localUpscaleFactor || 2}x</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="2"
+                    max="4"
+                    step="1"
+                    value={localConfig.localUpscaleFactor || 2}
+                    onChange={(e) => setLocalConfig(prev => ({ ...prev, localUpscaleFactor: Number(e.target.value) }))}
+                    className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <hr className="border-slate-800" />
