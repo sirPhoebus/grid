@@ -3,7 +3,7 @@ export class ComfyUiService {
     private static readonly API_BASE_URL = '/comfy-api';
     private static clientId = crypto.randomUUID();
 
-    static async upscaleFrame(base64Image: string): Promise<string> {
+    static async upscaleFrame(base64Image: string, upscaleFactor?: number): Promise<string> {
         // 1. Upload Image
         const filename = await this.uploadImage(base64Image);
 

@@ -144,24 +144,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, c
                     </button>
                   </div>
                 </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-semibold text-slate-400 uppercase">Resize Factor</label>
-                    <span className="text-xs font-mono text-indigo-400">{localConfig.localUpscaleFactor || 2}x</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="2"
-                    max="4"
-                    step="1"
-                    value={localConfig.localUpscaleFactor || 2}
-                    onChange={(e) => setLocalConfig(prev => ({ ...prev, localUpscaleFactor: Number(e.target.value) }))}
-                    className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                  />
-                </div>
               </div>
             )}
+            
+            <div className="pt-2">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-slate-400 uppercase">Upscale Factor <span className="normal-case font-normal opacity-50 ml-1">(Where supported)</span></label>
+                <span className="text-xs font-mono text-indigo-400">{localConfig.localUpscaleFactor || 2}x</span>
+              </div>
+              <input
+                type="range"
+                min="2"
+                max="4"
+                step="1"
+                value={localConfig.localUpscaleFactor || 2}
+                onChange={(e) => setLocalConfig(prev => ({ ...prev, localUpscaleFactor: Number(e.target.value) }))}
+                className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              />
+              <div className="flex justify-between text-xs text-slate-500 px-1 mt-1 font-mono">
+                <span>2x</span>
+                <span>3x</span>
+                <span>4x</span>
+              </div>
+            </div>
           </div>
 
           <hr className="border-slate-800" />

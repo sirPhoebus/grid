@@ -183,3 +183,13 @@ All keyframes must be the exact same aspect ratio, and exactly 6 keyframes shoul
  
 Output Format
 A) 2×3 Contact Sheet Image (Mandatory)
+
+Using these exact elements, generate a cinematic contact sheet with 6 distinct camera shots. The framing must adapt naturally to the subject type. 
+Maintain strict consistency across all panels, character integrity aswell.
+Generate all frames in 4K resolution.
+<Story context>
+Echoes of Absence (Presentation & Discovery)
+Setting: A sleek, minimalist law office high in a corporate tower, contrasted with Maya's personal, slightly cluttered apartment filled with books and plants. Nighttime. Rain streaks the city panorama outside her window.
+Description: Maya, Kaito’s daughter, is a sharp, determined lawyer navigating the complex legal labyrinth of their ÆON-dominated city. We see her finishing a late case file, the city lights reflecting in her focused eyes. Returning home, weary, she catches a news alert flashing on a public screen: a list of most wanted hacktivists. Her heart stops. Her father's face, younger but unmistakable, stares out under the name "Kaito Volkov - Designated Digital Terrorist." Disbelief wars with a sickening sense of understanding – his paranoia, his secrecy, it wasn't just eccentricity.
+Action: Maya frantically tries calling her father's secure comm line. It's dead. Panic sets in. She accesses secure city records (using skills perhaps subtly learned from her father) and confirms his status and the ÆON alert linked to his registered address.
+</story context>

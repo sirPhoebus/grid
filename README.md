@@ -12,8 +12,12 @@ Powered by **Gemini 1.5 Pro**, **Veo 3.1**, and **Kling AI**, this application a
 
 - **Multi-Provider Support**: Choose between **Google's Veo 3.1** or **Kling AI** for video generation.
 - **Auto-Slicing**: Automatically detects and slices 3x3 grid layouts into individual frames.
-- **HD Upscaling**: Uses **Gemini 2.5 Flash** and **Gemini 3 Pro** to enhance frame detail before generation.
+- **HD Upscaling**: 
+  - **Gemini 3 Pro**: Quick and high quality.
+  - **Local Stable Diffusion**: Control via A1111 WebUI (Extras or Img2Img).
+  - **ComfyUI**: Use "SeedVR2 Video Upscaler" workflow locally.
 - **Smart Settings**: Configure your API keys and provider preferences directly in the UI.
+- **Workflow Control**: Manual control over each step (Slice -> Upscale -> Generate Video).
 - **CORS Proxy**: Built-in development proxy for seamless API access.
 
 ## 🚀 Run Locally
@@ -38,25 +42,31 @@ Powered by **Gemini 1.5 Pro**, **Veo 3.1**, and **Kling AI**, this application a
     ```
 
 4.  **Open in Browser:**
-    Navigate to `http://localhost:5173`
+    Navigate to `http://localhost:3000` (Note: Port 3000 is default).
 
-## 5. Local Stable Diffusion Upscaling
+## 🎮 Upscaling Options
+
+### 1. Google Gemini 3 Pro
+Default option. Requires a standard Gemini API key.
+
+### 2. Local ComfyUI (Recommended for high quality)
+1.  Ensure **ComfyUI** is running locally on port **8188** (`127.0.0.1:8188`).
+2.  Go to **Settings** in GridToVideo Pro.
+3.  Change **Image Upscaling Method** to "ComfyUI".
+4.  The app uses a built-in workflow ("SeedVR2 Video Upscaler").
+
+### 3. Local Stable Diffusion
 1.  Ensure **Automatic1111 WebUI** is running locally.
 2.  Enable the API flag: `COMMANDLINE_ARGS=--api`.
-3.  Go to **Settings** in GridToVideo Pro.
-4.  Change **Image Upscaling Method** to "Local Stable Diffusion".
-5.  Select **Method**:
-    -   **Upscaler (Extras)**: Traditional resizing (R-ESRGAN).
-    -   **Img2Img (Generative)**: Adds details using "SD Upscale" script. Respects original image aspect ratio. Prompt: "4K, lots of details, hires, HDR, sharp".
-6.  Adjust the **Resize Factor** (e.g., 2x or 3x).
-7.  Save changes.
+3.  Go to **Settings**, select "Local Stable Diffusion".
+4.  Choose "Upscaler (Extras)" or "Img2Img".
 
 ## 🛠️ Configuration
 
 Click the **Settings (⚙️)** icon in the top right to:
-- Switch between **Gemini (Veo)** and **Kling AI** backends.
-- Enter/Update your **Kling Access/Secret Keys**.
-- Enter your **Gemini API Key** (for local use).
+- Switch between **Gemini (Veo)** and **Kling AI** backends for video transitions.
+- Choose your **Upscaling Provider** (Gemini, Stable Diffusion, or ComfyUI).
+- Enter/Update your API Keys.
 
 > **Note**: Keys entered in the UI are stored securely in your browser's `localStorage`.
 

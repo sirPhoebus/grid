@@ -25,14 +25,14 @@ export class GeminiService {
     return response.text.toLowerCase().includes('true');
   }
 
-  static async upscaleFrame(base64Image: string, aspectRatio: SupportedAspectRatio = "1:1", apiKey?: string): Promise<string> {
+  static async upscaleFrame(base64Image: string, aspectRatio: SupportedAspectRatio = "1:1", apiKey?: string, upscaleFactor: number = 2): Promise<string> {
     const ai = await this.getAI(apiKey);
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-image-preview',
       contents: {
         parts: [
           { inlineData: { data: base64Image, mimeType: 'image/png' } },
-          { text: `Upscale this individual frame to HD quality. Enhance details, remove noise, and preserve the artistic style perfectly. Output aspect ratio should be ${aspectRatio}.` }
+          { text: `Upscale this individual frame to HD quality (resize by ${upscaleFactor}x). Enhance details, remove noise, and preserve the artistic style perfectly. Output aspect ratio should be ${aspectRatio}.` }
         ]
       },
       config: {

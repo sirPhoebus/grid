@@ -42,6 +42,134 @@ export default defineConfig(({ mode }) => {
       {
         name: 'save-sliced-images',
         configureServer(server) {
+          // Middleware to list media folders
+          server.middlewares.use('/list-media', (req, res, next) => {
+            if (req.method === 'GET') {
+              const mediaDir = path.resolve(process.cwd(), 'media');
+              const result: any = { sliced_img: [], upscale: [] };
+
+              const types = ['sliced_img', 'upscale', 'individual_upscale'];
+              types.forEach(type => {
+                const typeDir = path.join(mediaDir, type);
+                if (fs.existsSync(typeDir)) {
+                  try {
+                    const entries = fs.readdirSync(typeDir, { withFileTypes: true });
+
+                    // Get subdirectories
+                    const folders = entries
+                      .filter(dirent => dirent.isDirectory())
+                      .map(dirent => {
+                        const folderPath = path.join(typeDir, dirent.name);
+                        const files = fs.readdirSync(folderPath)
+                          .filter(file => /\.(png|jpg|jpeg|mp4|webm)$/i.test(file));
+                        return {
+                          name: dirent.name,
+                          files: files.map(f => `/media/${type}/${dirent.name}/${f}`)
+                        };
+                      });
+
+                    // Get root files
+                    const rootFiles = entries
+                      .filter(dirent => !dirent.isDirectory() && /\.(png|jpg|jpeg|mp4|webm)$/i.test(dirent.name))
+                      .map(dirent => `/media/${type}/${dirent.name}`);
+
+                    if (rootFiles.length > 0) {
+                      folders.unshift({
+                        name: 'Miscellaneous',
+                        files: rootFiles
+                      });
+                    }
+
+                    // Sort folders by creation time or name (desc) to show newest first?
+                    // readdirSync doesn't give time, would need stat. Let's sort by name desc as it contains timestamp.
+                    folders.sort((a, b) => b.name.localeCompare(a.name));
+                    result[type] = folders;
+                  } catch (e) {
+                    console.error("Error reading dir", e);
+                  }
+                }
+              });
+
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify(result));
+            } else {
+              next();
+            }
+          });
+
+          // Middleware to serve static media files
+          server.middlewares.use('/media', (req, res, next) => {
+            const url = req.url || '';
+            // Security check: ensure no traversal
+            if (url.includes('..')) {
+              res.statusCode = 403;
+              res.end('Forbidden');
+              return;
+            }
+            const filePath = path.join(process.cwd(), 'media', url);
+            if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+              const ext = path.extname(filePath).toLowerCase();
+              const mime: Record<string, string> = {
+                '.png': 'image/png',
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.mp4': 'video/mp4',
+                '.webm': 'video/webm'
+              };
+              res.setHeader('Content-Type', mime[ext] || 'application/octet-stream');
+              fs.createReadStream(filePath).pipe(res);
+            } else {
+              next();
+            }
+          });
+
+          // Middleware to delete media folders
+          server.middlewares.use('/delete-media', (req, res, next) => {
+            if (req.method === 'POST') {
+              const chunks: Uint8Array[] = [];
+              req.on('data', chunk => chunks.push(chunk));
+              req.on('end', () => {
+                try {
+                  const body = JSON.parse(Buffer.concat(chunks).toString());
+                  const { type, name } = body;
+
+                  if (!type || !name) {
+                    res.statusCode = 400;
+                    res.end('Missing params');
+                    return;
+                  }
+
+                  const safeName = name.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+                  const safeType = type === 'sliced_img' ? 'sliced_img' : 'upscale';
+
+                  const targetDir = path.resolve(process.cwd(), 'media', safeType, safeName);
+
+                  // Safety check
+                  if (!targetDir.startsWith(path.join(process.cwd(), 'media'))) {
+                    res.statusCode = 403;
+                    res.end('Invalid path');
+                    return;
+                  }
+
+                  if (fs.existsSync(targetDir)) {
+                    fs.rmSync(targetDir, { recursive: true, force: true });
+                    res.statusCode = 200;
+                    res.end('deleted');
+                  } else {
+                    res.statusCode = 404;
+                    res.end('Not found');
+                  }
+                } catch (e) {
+                  console.error("Delete error", e);
+                  res.statusCode = 500;
+                  res.end('error');
+                }
+              });
+            } else {
+              next();
+            }
+          });
+
           server.middlewares.use('/save-slice', (req, res, next) => {
             if (req.method === 'POST') {
               // console.log("Received /save-slice request");
