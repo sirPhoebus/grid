@@ -16,7 +16,12 @@ interface MediaData {
     inverse: MediaFolder[];
 }
 
-export const Gallery: React.FC = () => {
+interface GalleryProps {
+    onSendToTurbo?: (data: { imageUrl: string, prompt: string }) => void;
+    onSendToUpscale?: (imageUrl: string, prompt: string) => void;
+}
+
+export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale }) => {
     const [data, setData] = useState<MediaData>({
         sliced_img: [], upscale: [], individual_upscale: [], turbowan: [], stitched: [], z_image: [], inverse: []
     });
@@ -322,13 +327,13 @@ export const Gallery: React.FC = () => {
                     </button>
 
                     <div
-                        className="max-w-7xl max-h-[90vh] w-full flex items-center justify-center animate-in zoom-in-95 duration-300"
+                        className="max-w-7xl max-h-[90vh] w-full flex flex-col md:flex-row items-center justify-center gap-6 animate-in zoom-in-95 duration-300"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {isMediaVideo ? (
                             <video
                                 src={selectedMedia}
-                                className="max-w-full max-h-[90vh] rounded-2xl shadow-2xl border border-white/10"
+                                className="max-w-full max-h-[80vh] rounded-2xl shadow-2xl border border-white/10"
                                 controls
                                 autoPlay
                                 loop
@@ -336,10 +341,36 @@ export const Gallery: React.FC = () => {
                         ) : (
                             <img
                                 src={selectedMedia}
-                                className="max-w-full max-h-[90vh] rounded-2xl shadow-2xl border border-white/10 object-contain"
+                                className="max-w-full max-h-[80vh] rounded-2xl shadow-2xl border border-white/10 object-contain"
                                 alt="Full Preview"
                             />
                         )}
+
+                        {/* Action Buttons */}
+                        <div className="flex flex-row md:flex-col gap-4 min-w-[200px]">
+                            {onSendToTurbo && (
+                                <button
+                                    onClick={() => onSendToTurbo({ imageUrl: selectedMedia, prompt: "From Gallery" })}
+                                    className="flex items-center gap-3 px-6 py-4 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white font-bold text-sm backdrop-blur-md border border-white/10 transition-all shadow-xl active:scale-95 w-full justify-center group"
+                                >
+                                    <svg className="w-5 h-5 group-hover:animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                    </svg>
+                                    Use in TurboWan
+                                </button>
+                            )}
+                            {onSendToUpscale && (
+                                <button
+                                    onClick={() => onSendToUpscale(selectedMedia, "From Gallery")}
+                                    className="flex items-center gap-3 px-6 py-4 bg-cyan-600 hover:bg-cyan-500 rounded-xl text-white font-bold text-sm backdrop-blur-md border border-white/10 transition-all shadow-xl active:scale-95 w-full justify-center group"
+                                >
+                                    <svg className="w-5 h-5 group-hover:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                                    </svg>
+                                    Upscale Image
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}

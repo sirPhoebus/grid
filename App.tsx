@@ -897,6 +897,24 @@ const App: React.FC = () => {
               setCurrentView('upscale');
             }}
           />
+        ) : currentView === 'gallery' ? (
+          <Gallery
+            onSendToTurbo={(data) => {
+              setTurboHandover(data);
+              setCurrentView('turbo-wan');
+            }}
+            onSendToUpscale={(imageUrl, prompt) => {
+              setIndividualState({
+                file: null,
+                originalPreview: imageUrl,
+                upscaledPreview: null,
+                isProcessing: false,
+                error: null,
+                prompt: prompt || ""
+              });
+              setCurrentView('upscale');
+            }}
+          />
         ) : (
           <>
             {state.step === ProcessingStep.IDLE && (

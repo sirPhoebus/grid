@@ -432,7 +432,7 @@ export default defineConfig(({ mode }) => {
                   const dir = path.resolve(process.cwd(), 'media', safeTargetDir, safeFolder);
 
                   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-                  const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+                  const base64Data = image.replace(/^data:\w+\/[\w\-]+;base64,/, "");
                   fs.writeFileSync(path.join(dir, filename), base64Data, 'base64');
                   // console.log(`Saved ${safeTargetDir}/${safeFolder}/${filename}`);
                   res.statusCode = 200;

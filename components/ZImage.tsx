@@ -12,7 +12,7 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
         width: 1024,
         height: 1536,
         steps: 9,
-        prompt: "Latina female with thick wavy hair, harbor boats and pastel houses behind. Breezy seaside light, warm tones, cinematic close-up.",
+        prompt: "masterpiece, best quality, amazing quality, 4k, 8k, very aesthetic, high resolution, ultra-detailed, absurdres, scenery, photorealistic, 1girl, solo, (japanese:1.3) AND (korean:1.1) AND (french AND latin american:1.2), beautiful, cute, sharp face, long hair, brown hair, low ponytail, wavy hair, loosely tucked bangs, brown eyes, double eyelid, aegyo sal, upturned eyes, turning head, looking at viewer, seductive, blush, smile, closed mouth, nude, (round heavy perky fake natural extremely gigantic breasts with enormous bust and massive volume:1.5), (huge puffy nipples:1.5), pussy, fat mons, curvy, thick build, skinny, impossible body anatomy, squeezing own breasts with elbow, arched back, front, sideboob, cleavage, head tilt, from above, portrait, seducing, wet body, wet hair, dark black shower room, raw light, BREAK, detailed skin, depth of field, photorealistic details",
         negative_prompt: "text, watermark, low quality",
         cfg: 1,
         sampler_name: 'res_multistep',
@@ -56,16 +56,25 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
 
             // Save to dedicated folder for gallery
             const timestamp = Date.now();
-            await fetch('/save-slice', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    image: result.imageUrl,
-                    filename: `zimage_${timestamp}.png`,
-                    folder: '.',
-                    targetDir: 'z_image'
-                })
-            });
+
+            // Convert blob URL to base64
+            const response = await fetch(result.imageUrl);
+            const blob = await response.blob();
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onloadend = async () => {
+                const base64data = reader.result as string;
+                await fetch('/save-slice', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        image: base64data,
+                        filename: `zimage_${timestamp}.png`,
+                        folder: '.',
+                        targetDir: 'z_image'
+                    })
+                });
+            };
         } catch (err: any) {
             setError(err.message || 'Generation failed');
             console.error(err);
