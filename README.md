@@ -1,8 +1,8 @@
 <div align="center">
-<img width="100%" alt="GridToVideo Pro" src="promo.png" />
+<img width="100%" alt="Alcove Pro" src="promo.png" />
 </div>
 
-# GridToVideo Pro
+# Alcove Pro
 
 **Transform static 3x3 grid images into dynamic, cinematic video sequences using AI.**
 
@@ -51,7 +51,7 @@ Default option. Requires a standard Gemini API key.
 
 ### 2. Local ComfyUI (Recommended for high quality)
 1.  Ensure **ComfyUI** is running locally on port **8188** (`127.0.0.1:8188`).
-2.  Go to **Settings** in GridToVideo Pro.
+2.  Go to **Settings** in Alcove Pro.
 3.  Change **Image Upscaling Method** to "ComfyUI".
 4.  The app uses a built-in workflow ("SeedVR2 Video Upscaler").
 
@@ -72,3 +72,24 @@ Click the **Settings (⚙️)** icon in the top right to:
 
 ---
 *Built with React, Vite, and TailwindCSS.*
+
+## 📜 Release Notes (v1.0.0)
+
+### **Alcove Pro Rebrand**
+- Renamed project to **Alcove Pro** to reflect its evolution into a comprehensive media suite.
+
+### **New Features**
+- **Unified Media Gallery**: All generated assets (videos, stitched sequences, Z-Images) are now organized in a central Gallery with improved aspect ratio support.
+- **Global Prompt Library**: Save and manage your favorite prompts across TurboWan and Z-Image. Prompts are synced in real-time.
+- **Z-Image Generation**: Create high-quality AI images directly within the app using the new configured ComfyUI workflow.
+- **Individual Upscaling**: Dedicated page for upscaling single images using Gemini, ComfyUI, or Local Stable Diffusion.
+- **Frame Extraction**: Extract high-quality last frames from videos to use as anchors for new generations.
+- **Seamless Handover**: 
+    - Send generated Z-Images to Upscale.
+    - Send extracted frames to TurboWan.
+    - **NEW**: Send upscaled results back to TurboWan to animate them with preserved prompts.
+
+### **Improvements**
+- **Reactive UI**: Components now auto-refresh state when interacting with the Prompt Library.
+- **Smart Aspect Ratios**: Gallery now intelligently displays media without cropping or squashing, supporting vertical and portrait formats.
+- **Enhanced Upscaling**: Added "Animate in TurboWan" button to the upscale results page for immediate workflow continuity.

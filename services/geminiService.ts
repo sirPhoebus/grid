@@ -11,13 +11,31 @@ export class GeminiService {
     return new GoogleGenAI({ apiKey: key });
   }
 
-  static async verifyGridWithNano(base64Image: string, apiKey?: string): Promise<boolean> {
+  private static async toBase64(imageInput: string): Promise<string> {
+    if (!imageInput) return "";
+    if (imageInput.startsWith('blob:')) {
+      const response = await fetch(imageInput);
+      const blob = await response.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64 = reader.result as string;
+          resolve(base64.split(',')[1]);
+        };
+        reader.readAsDataURL(blob);
+      });
+    }
+    return imageInput.split(',')[1] || imageInput;
+  }
+
+  static async verifyGridWithNano(imageInput: string, apiKey?: string): Promise<boolean> {
     const ai = await this.getAI(apiKey);
+    const base64Data = await this.toBase64(imageInput);
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
         parts: [
-          { inlineData: { data: base64Image, mimeType: 'image/png' } },
+          { inlineData: { data: base64Data, mimeType: 'image/png' } },
           { text: "Is this image a 3x3 grid of sub-images? Answer with only 'true' or 'false'." }
         ]
       }
@@ -25,13 +43,14 @@ export class GeminiService {
     return response.text.toLowerCase().includes('true');
   }
 
-  static async upscaleFrame(base64Image: string, aspectRatio: SupportedAspectRatio = "1:1", apiKey?: string, upscaleFactor: number = 2): Promise<string> {
+  static async upscaleFrame(imageInput: string, aspectRatio: SupportedAspectRatio = "1:1", apiKey?: string, upscaleFactor: number = 2): Promise<string> {
     const ai = await this.getAI(apiKey);
+    const base64Data = await this.toBase64(imageInput);
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-image-preview',
       contents: {
         parts: [
-          { inlineData: { data: base64Image, mimeType: 'image/png' } },
+          { inlineData: { data: base64Data, mimeType: 'image/png' } },
           { text: `Upscale this individual frame to HD quality (resize by ${upscaleFactor}x). Enhance details, remove noise, and preserve the artistic style perfectly. Output aspect ratio should be ${aspectRatio}.` }
         ]
       },
@@ -61,8 +80,8 @@ export class GeminiService {
     const ai = await this.getAI(apiKey);
 
     // Convert data URLs to raw base64 if needed
-    const startData = startFrameBase64.split(',')[1] || startFrameBase64;
-    const endData = endFrameBase64.split(',')[1] || endFrameBase64;
+    const startData = await this.toBase64(startFrameBase64);
+    const endData = await this.toBase64(endFrameBase64);
 
     if (signal?.aborted) throw new Error("Aborted");
 

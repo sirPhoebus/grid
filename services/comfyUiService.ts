@@ -1,3 +1,11 @@
+export interface ZImageParams {
+    width: number;
+    height: number;
+    steps: number;
+    prompt: string;
+    sampler_name: 'euler' | 'res_multistep';
+    scheduler: 'beta' | 'simple';
+}
 
 export class ComfyUiService {
     private static readonly API_BASE_URL = '/comfy-api';
@@ -28,15 +36,25 @@ export class ComfyUiService {
         return await this.getImage(imageInfo.filename, imageInfo.subfolder, imageInfo.type);
     }
 
-    private static async uploadImage(base64Image: string): Promise<string> {
-        const cleanBase64 = base64Image.replace(/^data:image\/\w+;base64,/, '');
-        const byteCharacters = atob(cleanBase64);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
+    private static async uploadImage(imageInput: string): Promise<string> {
+        if (!imageInput) {
+            throw new Error("No image input provided for upload");
         }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'image/png' });
+        let blob: Blob;
+
+        if (imageInput.startsWith('blob:')) {
+            const response = await fetch(imageInput);
+            blob = await response.blob();
+        } else {
+            const cleanBase64 = imageInput.replace(/^data:image\/\w+;base64,/, '');
+            const byteCharacters = atob(cleanBase64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            blob = new Blob([byteArray], { type: 'image/png' });
+        }
 
         const formData = new FormData();
         const filename = `upload_${Date.now()}_${Math.floor(Math.random() * 1000)}.png`;
@@ -121,6 +139,226 @@ export class ComfyUiService {
         return await response.json();
     }
 
+    public static async runTurboWanWorkflow(base64Image: string, promptText: string, aspectRatio: string = "16:9"): Promise<{ videoUrl: string, lastFrameUrl: string, localVideoPath: string }> {
+        // 1. Upload Image
+        const filename = await this.uploadImage(base64Image);
+
+        // 2. Queue Prompt
+        console.log("--- WAN API Prompt ---");
+        console.log(promptText);
+        console.log("----------------------");
+        const prompt = this.getTurboWanWorkflow(filename, promptText, aspectRatio);
+        const { prompt_id } = await this.queuePrompt(prompt);
+
+        // 3. Wait for execution
+        await this.waitForExecution(prompt_id);
+
+        // 4. Get Output
+        const history = await this.getHistory(prompt_id);
+        const outputs = history[prompt_id].outputs;
+
+        // Node 9 is VHS_VideoCombine in the provided JSON
+        const videoCombineOutput = outputs['9'];
+        if (!videoCombineOutput || !videoCombineOutput.gifs || videoCombineOutput.gifs.length === 0) {
+            throw new Error("No output video found from ComfyUI (Node 9)");
+        }
+
+        const videoInfo = videoCombineOutput.gifs[0];
+        const videoUrl = `${this.API_BASE_URL}/view?filename=${videoInfo.filename}&subfolder=${videoInfo.subfolder}&type=${videoInfo.type}`;
+
+        // 5. Save video and get last frame from ComfyUI
+        const saveRes = await fetch('/save-video', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: videoUrl })
+        });
+        const { path: localVideoPath } = await saveRes.json();
+
+        // 6. Get Last Frame from PreviewImage (Node 8)
+        const previewOutput = outputs['8'];
+        if (!previewOutput || !previewOutput.images || previewOutput.images.length === 0) {
+            throw new Error("No preview images found from ComfyUI (Node 8)");
+        }
+
+        const lastImageInfo = previewOutput.images[previewOutput.images.length - 1];
+        const lastFrameUrl = await this.getImage(lastImageInfo.filename, lastImageInfo.subfolder, lastImageInfo.type);
+
+        return { videoUrl, lastFrameUrl, localVideoPath };
+    }
+
+    static async stitchVideos(videoPaths: string[]): Promise<string> {
+        const response = await fetch('/stitch-videos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ videos: videoPaths })
+        });
+        const { url } = await response.json();
+        return url;
+    }
+
+    private static getTurboWanWorkflow(inputFilename: string, promptText: string, aspectRatio: string) {
+        let width = 480;
+        let height = 480;
+
+        // Map aspect ratio to dimensions (Wan handles specific resolutions best)
+        // Default to a base of 480 for the shorter side usually, or specific Wan-friendly values
+        if (aspectRatio === "16:9") {
+            width = 848;
+            height = 480;
+        } else if (aspectRatio === "9:16") {
+            width = 480;
+            height = 848;
+        } else if (aspectRatio === "4:3") {
+            width = 640;
+            height = 480;
+        } else if (aspectRatio === "3:4") {
+            width = 480;
+            height = 640;
+        }
+
+        return {
+            "1": {
+                "inputs": {
+                    "model_name": "TurboWan2.2-I2V-A14B-high-720P-quant.pth",
+                    "attention_type": "sla",
+                    "sla_topk": 0.1,
+                    "offload_mode": "comfy_native"
+                },
+                "class_type": "TurboWanModelLoader",
+                "_meta": {
+                    "title": "Load High Noise Model"
+                }
+            },
+            "2": {
+                "inputs": {
+                    "model_name": "TurboWan2.2-I2V-A14B-low-720P-quant.pth",
+                    "attention_type": "sla",
+                    "sla_topk": 0.1,
+                    "offload_mode": "comfy_native"
+                },
+                "class_type": "TurboWanModelLoader",
+                "_meta": {
+                    "title": "Load Low Noise Model"
+                }
+            },
+            "3": {
+                "inputs": {
+                    "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+                    "type": "wan",
+                    "device": "default"
+                },
+                "class_type": "CLIPLoader",
+                "_meta": {
+                    "title": "Load CLIP (umT5 Text Encoder)"
+                }
+            },
+            "4": {
+                "inputs": {
+                    "text": promptText,
+                    "clip": [
+                        "3",
+                        0
+                    ]
+                },
+                "class_type": "CLIPTextEncode",
+                "_meta": {
+                    "title": "Positive Prompt"
+                }
+            },
+            "5": {
+                "inputs": {
+                    "vae_name": "Wan2.1_VAE.pth"
+                },
+                "class_type": "TurboWanVAELoader",
+                "_meta": {
+                    "title": "Load Wan VAE"
+                }
+            },
+            "6": {
+                "inputs": {
+                    "image": inputFilename
+                },
+                "class_type": "LoadImage",
+                "_meta": {
+                    "title": "Load Start Image"
+                }
+            },
+            "7": {
+                "inputs": {
+                    "num_frames": 97,
+                    "num_steps": 4,
+                    "resolution": "480",
+                    "aspect_ratio": aspectRatio,
+                    "boundary": 0.9,
+                    "sigma_max": 200,
+                    "seed": Math.floor(Math.random() * 1000000),
+                    "use_ode": false,
+                    "low_vram": false,
+                    "width": width,
+                    "height": height,
+                    "high_noise_model": [
+                        "1",
+                        0
+                    ],
+                    "low_noise_model": [
+                        "2",
+                        0
+                    ],
+                    "conditioning": [
+                        "4",
+                        0
+                    ],
+                    "vae": [
+                        "5",
+                        0
+                    ],
+                    "image": [
+                        "6",
+                        0
+                    ]
+                },
+                "class_type": "TurboDiffusionI2VSampler",
+                "_meta": {
+                    "title": "TurboDiffusion I2V Sampler"
+                }
+            },
+            "8": {
+                "inputs": {
+                    "images": [
+                        "7",
+                        0
+                    ]
+                },
+                "class_type": "PreviewImage",
+                "_meta": {
+                    "title": "Preview Frames"
+                }
+            },
+            "9": {
+                "inputs": {
+                    "frame_rate": 25,
+                    "loop_count": 0,
+                    "filename_prefix": "AnimateDiff",
+                    "format": "video/h264-mp4",
+                    "pix_fmt": "yuv420p",
+                    "crf": 19,
+                    "save_metadata": true,
+                    "trim_to_audio": false,
+                    "pingpong": false,
+                    "save_output": true,
+                    "images": [
+                        "7",
+                        0
+                    ]
+                },
+                "class_type": "VHS_VideoCombine",
+                "_meta": {
+                    "title": "Video Combine 🎥🅥🅗🅢"
+                }
+            }
+        };
+    }
+
     private static async getImage(filename: string, subfolder: string, type: string): Promise<string> {
         const params = new URLSearchParams({
             filename,
@@ -129,13 +367,153 @@ export class ComfyUiService {
         });
         const response = await fetch(`${this.API_BASE_URL}/view?${params.toString()}`);
         if (!response.ok) throw new Error("Failed to get output image");
-
         const blob = await response.blob();
+        return URL.createObjectURL(blob);
+    }
+
+    static getZImageWorkflow(params: ZImageParams) {
+        return {
+            "9": {
+                "inputs": {
+                    "filename_prefix": "z-image",
+                    "images": ["43", 0]
+                },
+                "class_type": "SaveImage",
+                "_meta": { "title": "Save Image" }
+            },
+            "39": {
+                "inputs": {
+                    "clip_name": "qwen_3_4b.safetensors",
+                    "type": "lumina2",
+                    "device": "default"
+                },
+                "class_type": "CLIPLoader",
+                "_meta": { "title": "Load CLIP" }
+            },
+            "40": {
+                "inputs": {
+                    "vae_name": "ae.safetensors"
+                },
+                "class_type": "VAELoader",
+                "_meta": { "title": "Load VAE" }
+            },
+            "41": {
+                "inputs": {
+                    "width": params.width,
+                    "height": params.height,
+                    "batch_size": 1
+                },
+                "class_type": "EmptySD3LatentImage",
+                "_meta": { "title": "EmptySD3LatentImage" }
+            },
+            "42": {
+                "inputs": {
+                    "conditioning": ["45", 0]
+                },
+                "class_type": "ConditioningZeroOut",
+                "_meta": { "title": "ConditioningZeroOut" }
+            },
+            "43": {
+                "inputs": {
+                    "samples": ["44", 0],
+                    "vae": ["40", 0]
+                },
+                "class_type": "VAEDecode",
+                "_meta": { "title": "VAE Decode" }
+            },
+            "44": {
+                "inputs": {
+                    "seed": Math.floor(Math.random() * 1000000000000000),
+                    "steps": params.steps,
+                    "cfg": 1,
+                    "sampler_name": params.sampler_name,
+                    "scheduler": params.scheduler,
+                    "denoise": 1,
+                    "model": ["47", 0],
+                    "positive": ["45", 0],
+                    "negative": ["42", 0],
+                    "latent_image": ["41", 0]
+                },
+                "class_type": "KSampler",
+                "_meta": { "title": "KSampler" }
+            },
+            "45": {
+                "inputs": {
+                    "text": params.prompt,
+                    "clip": ["39", 0]
+                },
+                "class_type": "CLIPTextEncode",
+                "_meta": { "title": "CLIP Text Encode (Prompt)" }
+            },
+            "46": {
+                "inputs": {
+                    "unet_name": "zImage_turbo.safetensors",
+                    "weight_dtype": "default"
+                },
+                "class_type": "UNETLoader",
+                "_meta": { "title": "Load Diffusion Model" }
+            },
+            "47": {
+                "inputs": {
+                    "shift": 3,
+                    "model": ["46", 0]
+                },
+                "class_type": "ModelSamplingAuraFlow",
+                "_meta": { "title": "ModelSamplingAuraFlow" }
+            }
+        };
+    }
+
+    static async runZImageWorkflow(params: ZImageParams): Promise<{ imageUrl: string }> {
+        const workflow = this.getZImageWorkflow(params);
+        const clientId = 'zimage-' + Math.random().toString(36).substring(7);
+
         return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.host;
+            const wsUrl = `${protocol}//${host}/comfy-api/ws?clientId=${clientId}`;
+            const ws = new WebSocket(wsUrl);
+
+            ws.onopen = async () => {
+                try {
+                    const response = await fetch(`${this.API_BASE_URL}/prompt`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ prompt: workflow, client_id: clientId })
+                    });
+
+                    if (!response.ok) {
+                        const err = await response.json();
+                        reject(new Error(err.error?.message || 'Workflow failed validation'));
+                    }
+                } catch (err) {
+                    reject(err);
+                }
+            };
+
+            ws.onmessage = async (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    console.log("WS Message:", message.type, message);
+
+                    if (message.type === 'executed' && message.data.node === '9') {
+                        const output = message.data.output;
+                        if (output && output.images) {
+                            const image = output.images[0];
+                            const imageUrl = await this.getImage(image.filename, image.subfolder, image.type);
+                            ws.close();
+                            resolve({ imageUrl });
+                        }
+                    }
+                } catch (err) {
+                    console.error("Failed to parse WS message", err);
+                }
+            };
+
+            ws.onerror = (err) => {
+                reject(err);
+                ws.close();
+            };
         });
     }
 

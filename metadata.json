@@ -1,5 +1,5 @@
 {
-  "name": "GridToVideo Pro",
+  "name": "Alcove Pro",
   "description": "An advanced tool to slice 3x3 grid images, upscale each frame to 4K using Gemini Pro, and generate cinematic transitions between frames using Veo 3.1.",
   "requestFramePermissions": []
 }

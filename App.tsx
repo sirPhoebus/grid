@@ -7,12 +7,16 @@ import { ComfyUiService } from './services/comfyUiService';
 import { SettingsModal, AppConfig, ApiProvider } from './components/SettingsModal';
 import { ProcessingStep, Frame, VideoTransition, AppState } from './types';
 import { Gallery } from './components/Gallery';
+import { TurboWan } from './components/TurboWan';
+import { VideoStitcher } from './components/VideoStitcher';
+import { ZImage } from './components/ZImage';
+import { FrameExtractor } from './components/FrameExtractor';
 
 // Components
 const Header: React.FC<{
   onOpenSettings: () => void;
-  currentView: 'home' | 'gallery' | 'upscale';
-  onNavigate: (view: 'home' | 'gallery' | 'upscale') => void;
+  currentView: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor';
+  onNavigate: (view: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor') => void;
 }> = ({ onOpenSettings, currentView, onNavigate }) => (
   <header className="py-6 px-6 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
     <div className="max-w-6xl mx-auto flex items-center justify-between">
@@ -26,8 +30,8 @@ const Header: React.FC<{
           </svg>
         </div>
         <div>
-          <h1 className="text-xl font-bold tracking-tight">GridToVideo <span className="text-indigo-400">Pro</span></h1>
-          <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">Powered by Gemini & Veo 3.1 & Kling AI</p>
+          <h1 className="text-xl font-bold tracking-tight">Alcove <span className="text-indigo-400">Pro</span></h1>
+          <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">Version 1.0</p>
         </div>
       </div>
 
@@ -59,17 +63,46 @@ const Header: React.FC<{
         >
           Upscale
         </button>
+        <button
+          onClick={() => onNavigate('turbo-wan')}
+          className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'turbo-wan'
+            ? 'bg-indigo-600 text-white shadow-lg'
+            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+            }`}
+        >
+          TurboWan
+        </button>
+        <button
+          onClick={() => onNavigate('stitcher')}
+          className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'stitcher'
+            ? 'bg-indigo-600 text-white shadow-lg'
+            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+            }`}
+        >
+          Stitch
+        </button>
+        <button
+          onClick={() => onNavigate('z-image')}
+          className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'z-image'
+            ? 'bg-cyan-600 text-white shadow-lg'
+            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+            }`}
+        >
+          Z-Image
+        </button>
+        <button
+          onClick={() => onNavigate('extractor')}
+          className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'extractor'
+            ? 'bg-indigo-600 text-white shadow-lg'
+            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+            }`}
+        >
+          Extractor
+        </button>
       </nav>
 
       <div className="flex items-center gap-4">
-        <a
-          href="https://ai.google.dev/gemini-api/docs/billing"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="hidden md:block text-xs text-slate-500 hover:text-indigo-400 transition-colors"
-        >
-          Billing Documentation
-        </a>
+        Settings
         <button
           onClick={onOpenSettings}
           className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-all"
@@ -110,7 +143,8 @@ const ImageOverlay: React.FC<{ url: string; onClose: () => void }> = ({ url, onC
 );
 
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<'home' | 'gallery' | 'upscale'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor'>('home');
+  const [turboHandover, setTurboHandover] = useState<{ imageUrl: string, prompt: string } | null>(null);
   const [hasKey, setHasKey] = useState<boolean>(false);
   const [individualState, setIndividualState] = useState<{
     file: File | null;
@@ -118,12 +152,14 @@ const App: React.FC = () => {
     upscaledPreview: string | null;
     isProcessing: boolean;
     error: string | null;
+    prompt: string;
   }>({
     file: null,
     originalPreview: null,
     upscaledPreview: null,
     isProcessing: false,
-    error: null
+    error: null,
+    prompt: ""
   });
   const [overlayUrl, setOverlayUrl] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -153,7 +189,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     // Load config from local storage
-    const savedConfig = localStorage.getItem('gridtovideo_config');
+    const savedConfig = localStorage.getItem('alcove_config');
     if (savedConfig) {
       try {
         setConfig(JSON.parse(savedConfig));
@@ -184,7 +220,7 @@ const App: React.FC = () => {
 
   const handleSaveConfig = (newConfig: AppConfig) => {
     setConfig(newConfig);
-    localStorage.setItem('gridtovideo_config', JSON.stringify(newConfig));
+    localStorage.setItem('alcove_config', JSON.stringify(newConfig));
   };
 
   const handleSelectKey = async () => {
@@ -589,7 +625,7 @@ const App: React.FC = () => {
     setIndividualState(prev => ({ ...prev, isProcessing: true, error: null }));
 
     try {
-      const base64 = individualState.originalPreview;
+      const imageInput = individualState.originalPreview;
       let upscaled: string;
       const factor = config.localUpscaleFactor || 2;
 
@@ -597,7 +633,7 @@ const App: React.FC = () => {
       let ar: SupportedAspectRatio = "1:1";
       if (config.provider === 'gemini' && config.upscaler === 'gemini') {
         const img = new Image();
-        img.src = base64;
+        img.src = imageInput;
         await new Promise((resolve) => { img.onload = resolve; });
         const ratio = img.width / img.height;
         if (ratio > 1.4) ar = "16:9";
@@ -607,12 +643,12 @@ const App: React.FC = () => {
       }
 
       if (config.upscaler === 'local_sd') {
-        upscaled = await StableDiffusionService.upscaleFrame(base64.split(',')[1], factor, config.localSdMethod || 'extras');
+        upscaled = await StableDiffusionService.upscaleFrame(imageInput, factor, config.localSdMethod || 'extras');
       } else if (config.upscaler === 'comfyui') {
-        upscaled = await ComfyUiService.upscaleFrame(base64.split(',')[1], factor);
+        upscaled = await ComfyUiService.upscaleFrame(imageInput, factor);
       } else {
         // Gemini
-        upscaled = await GeminiService.upscaleFrame(base64.split(',')[1], ar, config.geminiKey, factor);
+        upscaled = await GeminiService.upscaleFrame(imageInput, ar, config.geminiKey, factor);
       }
 
       // Save
@@ -768,14 +804,31 @@ const App: React.FC = () => {
                   <div className="space-y-2">
                     <h3 className="text-sm font-semibold text-indigo-400 uppercase tracking-wider">Upscaled</h3>
                     {individualState.upscaledPreview ? (
-                      <div
-                        className="bg-slate-900 rounded-2xl overflow-hidden border border-indigo-500/30 cursor-zoom-in relative group"
-                        onClick={() => setOverlayUrl(individualState.upscaledPreview)}
-                      >
-                        <img src={individualState.upscaledPreview} className="w-full h-auto" alt="Upscaled" />
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <span className="text-white font-medium">Click to Preview</span>
+                      <div className="space-y-4">
+                        <div
+                          className="bg-slate-900 rounded-2xl overflow-hidden border border-indigo-500/30 cursor-zoom-in relative group"
+                          onClick={() => setOverlayUrl(individualState.upscaledPreview)}
+                        >
+                          <img src={individualState.upscaledPreview} className="w-full h-auto" alt="Upscaled" />
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <span className="text-white font-medium">Click to Preview</span>
+                          </div>
                         </div>
+                        <button
+                          onClick={() => {
+                            setTurboHandover({
+                              imageUrl: individualState.upscaledPreview!,
+                              prompt: individualState.prompt
+                            });
+                            setCurrentView('turbo-wan');
+                          }}
+                          className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 group"
+                        >
+                          <svg className="w-5 h-5 group-hover:animate-bounce-subtle" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                          Animate in TurboWan
+                        </button>
                       </div>
                     ) : (
                       <div className="aspect-square bg-slate-900/50 rounded-2xl border-2 border-dashed border-slate-800 flex items-center justify-center">
@@ -789,6 +842,49 @@ const App: React.FC = () => {
               </div>
             )}
           </div>
+        ) : currentView === 'turbo-wan' ? (
+          <TurboWan
+            initialData={turboHandover}
+            onClearInitialData={() => setTurboHandover(null)}
+          />
+        ) : currentView === 'stitcher' ? (
+          <VideoStitcher onNavigateToGallery={() => setCurrentView('gallery')} />
+        ) : currentView === 'z-image' ? (
+          <ZImage
+            onSendToTurbo={(data) => {
+              setTurboHandover(data);
+              setCurrentView('turbo-wan');
+            }}
+            onSendToUpscale={(imageUrl, prompt) => {
+              setIndividualState({
+                file: null,
+                originalPreview: imageUrl,
+                upscaledPreview: null,
+                isProcessing: false,
+                error: null,
+                prompt: prompt || ""
+              });
+              setCurrentView('upscale');
+            }}
+          />
+        ) : currentView === 'extractor' ? (
+          <FrameExtractor
+            onSendToTurbo={(data) => {
+              setTurboHandover(data);
+              setCurrentView('turbo-wan');
+            }}
+            onSendToUpscale={(imageUrl, prompt) => {
+              setIndividualState({
+                file: null,
+                originalPreview: imageUrl,
+                upscaledPreview: null,
+                isProcessing: false,
+                error: null,
+                prompt: prompt || ""
+              });
+              setCurrentView('upscale');
+            }}
+          />
         ) : (
           <>
             {state.step === ProcessingStep.IDLE && (

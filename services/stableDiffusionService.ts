@@ -5,11 +5,29 @@ export class StableDiffusionService {
     private static readonly API_BASE_URL = '/sd-api';
 
     static async upscaleFrame(
-        base64Image: string,
+        imageInput: string,
         resizeFactor: number,
         method: 'extras' | 'img2img' = 'extras'
     ): Promise<string> {
-        const cleanBase64 = base64Image.replace(/^data:image\/\w+;base64,/, '');
+        if (!imageInput) {
+            throw new Error("No image input provided for upscaling");
+        }
+        let cleanBase64: string;
+
+        if (imageInput.startsWith('blob:')) {
+            const response = await fetch(imageInput);
+            const blob = await response.blob();
+            cleanBase64 = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64 = reader.result as string;
+                    resolve(base64.split(',')[1]);
+                };
+                reader.readAsDataURL(blob);
+            });
+        } else {
+            cleanBase64 = imageInput.replace(/^data:image\/\w+;base64,/, '');
+        }
 
         if (method === 'img2img') {
             // For Img2Img, we need target dimensions
