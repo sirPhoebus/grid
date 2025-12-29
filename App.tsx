@@ -11,12 +11,13 @@ import { TurboWan } from './components/TurboWan';
 import { VideoStitcher } from './components/VideoStitcher';
 import { ZImage } from './components/ZImage';
 import { FrameExtractor } from './components/FrameExtractor';
+import { VideoReverser } from './components/VideoReverser';
 
 // Components
 const Header: React.FC<{
   onOpenSettings: () => void;
-  currentView: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor';
-  onNavigate: (view: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor') => void;
+  currentView: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor' | 'reverse';
+  onNavigate: (view: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor' | 'reverse') => void;
 }> = ({ onOpenSettings, currentView, onNavigate }) => (
   <header className="py-6 px-6 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
     <div className="max-w-6xl mx-auto flex items-center justify-between">
@@ -37,22 +38,13 @@ const Header: React.FC<{
 
       <nav className="flex items-center bg-slate-800/50 rounded-full p-1 border border-slate-700/50 absolute left-1/2 -translate-x-1/2 top-24 md:top-auto md:relative md:left-auto md:translate-x-0">
         <button
-          onClick={() => onNavigate('home')}
-          className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'home'
-            ? 'bg-indigo-600 text-white shadow-lg'
+          onClick={() => onNavigate('z-image')}
+          className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'z-image'
+            ? 'bg-cyan-600 text-white shadow-lg'
             : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
             }`}
         >
-          Create
-        </button>
-        <button
-          onClick={() => onNavigate('gallery')}
-          className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'gallery'
-            ? 'bg-indigo-600 text-white shadow-lg'
-            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-            }`}
-        >
-          Gallery
+          Z-Image
         </button>
         <button
           onClick={() => onNavigate('upscale')}
@@ -73,6 +65,15 @@ const Header: React.FC<{
           TurboWan
         </button>
         <button
+          onClick={() => onNavigate('home')}
+          className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'home'
+            ? 'bg-indigo-600 text-white shadow-lg'
+            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+            }`}
+        >
+          Grid
+        </button>
+        <button
           onClick={() => onNavigate('stitcher')}
           className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'stitcher'
             ? 'bg-indigo-600 text-white shadow-lg'
@@ -82,15 +83,6 @@ const Header: React.FC<{
           Stitch
         </button>
         <button
-          onClick={() => onNavigate('z-image')}
-          className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'z-image'
-            ? 'bg-cyan-600 text-white shadow-lg'
-            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-            }`}
-        >
-          Z-Image
-        </button>
-        <button
           onClick={() => onNavigate('extractor')}
           className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'extractor'
             ? 'bg-indigo-600 text-white shadow-lg'
@@ -98,6 +90,24 @@ const Header: React.FC<{
             }`}
         >
           Extractor
+        </button>
+        <button
+          onClick={() => onNavigate('reverse')}
+          className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'reverse'
+            ? 'bg-indigo-600 text-white shadow-lg'
+            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+            }`}
+        >
+          Reverse
+        </button>
+        <button
+          onClick={() => onNavigate('gallery')}
+          className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'gallery'
+            ? 'bg-indigo-600 text-white shadow-lg'
+            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+            }`}
+        >
+          Gallery
         </button>
       </nav>
 
@@ -849,6 +859,8 @@ const App: React.FC = () => {
           />
         ) : currentView === 'stitcher' ? (
           <VideoStitcher onNavigateToGallery={() => setCurrentView('gallery')} />
+        ) : currentView === 'reverse' ? (
+          <VideoReverser />
         ) : currentView === 'z-image' ? (
           <ZImage
             onSendToTurbo={(data) => {

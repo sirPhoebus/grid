@@ -3,6 +3,8 @@ export interface ZImageParams {
     height: number;
     steps: number;
     prompt: string;
+    negative_prompt?: string;
+    cfg?: number;
     sampler_name: 'euler' | 'res_multistep';
     scheduler: 'beta' | 'simple';
 }
@@ -199,21 +201,26 @@ export class ComfyUiService {
     private static getTurboWanWorkflow(inputFilename: string, promptText: string, aspectRatio: string) {
         let width = 480;
         let height = 480;
+        let arFloat = 1.777; // Default 16:9
 
         // Map aspect ratio to dimensions (Wan handles specific resolutions best)
         // Default to a base of 480 for the shorter side usually, or specific Wan-friendly values
         if (aspectRatio === "16:9") {
             width = 848;
             height = 480;
+            arFloat = 1.777;
         } else if (aspectRatio === "9:16") {
             width = 480;
             height = 848;
+            arFloat = 0.5625;
         } else if (aspectRatio === "4:3") {
             width = 640;
             height = 480;
+            arFloat = 1.333;
         } else if (aspectRatio === "3:4") {
             width = 480;
             height = 640;
+            arFloat = 0.75;
         }
 
         return {
@@ -408,10 +415,11 @@ export class ComfyUiService {
             },
             "42": {
                 "inputs": {
-                    "conditioning": ["45", 0]
+                    "text": params.negative_prompt || "",
+                    "clip": ["39", 0]
                 },
-                "class_type": "ConditioningZeroOut",
-                "_meta": { "title": "ConditioningZeroOut" }
+                "class_type": "CLIPTextEncode",
+                "_meta": { "title": "Negative Prompt" }
             },
             "43": {
                 "inputs": {
@@ -425,7 +433,7 @@ export class ComfyUiService {
                 "inputs": {
                     "seed": Math.floor(Math.random() * 1000000000000000),
                     "steps": params.steps,
-                    "cfg": 1,
+                    "cfg": params.cfg || 1,
                     "sampler_name": params.sampler_name,
                     "scheduler": params.scheduler,
                     "denoise": 1,

@@ -13,6 +13,8 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
         height: 1536,
         steps: 9,
         prompt: "Latina female with thick wavy hair, harbor boats and pastel houses behind. Breezy seaside light, warm tones, cinematic close-up.",
+        negative_prompt: "text, watermark, low quality",
+        cfg: 1,
         sampler_name: 'res_multistep',
         scheduler: 'simple'
     });
@@ -60,7 +62,7 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
                 body: JSON.stringify({
                     image: result.imageUrl,
                     filename: `zimage_${timestamp}.png`,
-                    folder: `generation_${timestamp}`,
+                    folder: '.',
                     targetDir: 'z_image'
                 })
             });
@@ -173,19 +175,47 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
                                 </button>
                             </div>
 
-                            {/* Steps */}
-                            <div className="space-y-2">
-                                <div className="flex justify-between items-center px-1">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Steps</label>
-                                    <span className="text-[10px] font-bold text-cyan-400">{params.steps}</span>
+                            {/* Steps & CFG */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center px-1">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Steps</label>
+                                        <span className="text-[10px] font-bold text-cyan-400">{params.steps}</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="1"
+                                        max="30"
+                                        value={params.steps}
+                                        onChange={(e) => setParams({ ...params, steps: parseInt(e.target.value) })}
+                                        className="w-full accent-cyan-500 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                                    />
                                 </div>
-                                <input
-                                    type="range"
-                                    min="1"
-                                    max="30"
-                                    value={params.steps}
-                                    onChange={(e) => setParams({ ...params, steps: parseInt(e.target.value) })}
-                                    className="w-full accent-cyan-500 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center px-1">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CFG</label>
+                                        <span className="text-[10px] font-bold text-purple-400">{params.cfg || 1}</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="1"
+                                        max="7"
+                                        step="0.1"
+                                        value={params.cfg || 1}
+                                        onChange={(e) => setParams({ ...params, cfg: parseFloat(e.target.value) })}
+                                        className="w-full accent-purple-500 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Negative Prompt */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Negative Prompt</label>
+                                <textarea
+                                    value={params.negative_prompt || ''}
+                                    onChange={(e) => setParams({ ...params, negative_prompt: e.target.value })}
+                                    className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-red-500/50 transition-all resize-none h-20"
+                                    placeholder="What to avoid..."
                                 />
                             </div>
 

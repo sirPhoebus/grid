@@ -13,13 +13,14 @@ interface MediaData {
     turbowan: MediaFolder[];
     stitched: MediaFolder[];
     z_image: MediaFolder[];
+    inverse: MediaFolder[];
 }
 
 export const Gallery: React.FC = () => {
     const [data, setData] = useState<MediaData>({
-        sliced_img: [], upscale: [], individual_upscale: [], turbowan: [], stitched: [], z_image: []
+        sliced_img: [], upscale: [], individual_upscale: [], turbowan: [], stitched: [], z_image: [], inverse: []
     });
-    const [activeTab, setActiveTab] = useState<'sliced_img' | 'upscale' | 'individual_upscale' | 'turbowan' | 'stitched' | 'z_image'>('stitched');
+    const [activeTab, setActiveTab] = useState<'sliced_img' | 'upscale' | 'individual_upscale' | 'turbowan' | 'stitched' | 'z_image' | 'inverse'>('stitched');
     const [loading, setLoading] = useState(true);
     const [selectedMedia, setSelectedMedia] = useState<string | null>(null);
     const [isMediaVideo, setIsMediaVideo] = useState(false);
@@ -35,7 +36,8 @@ export const Gallery: React.FC = () => {
                     individual_upscale: data.individual_upscale || [],
                     turbowan: data.turbowan || [],
                     stitched: data.stitched || [],
-                    z_image: data.z_image || []
+                    z_image: data.z_image || [],
+                    inverse: data.inverse || []
                 });
                 setLoading(false);
             })
@@ -169,6 +171,15 @@ export const Gallery: React.FC = () => {
                     >
                         Z-Image
                     </button>
+                    <button
+                        onClick={() => setActiveTab('inverse')}
+                        className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${activeTab === 'inverse'
+                            ? 'bg-fuchsia-600 text-white shadow-lg'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                            }`}
+                    >
+                        Inverse
+                    </button>
                 </div>
             </div>
 
@@ -188,7 +199,7 @@ export const Gallery: React.FC = () => {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <h3 className="font-bold text-slate-200 truncate" title={folder.name}>
-                                        {folder.name === 'Miscellaneous' ? 'Recent Uploads' : (folder.name.split('_').slice(0, -1).join(' ') || folder.name)}
+                                        {folder.name === 'Miscellaneous' ? 'Recent' : (folder.name.split('_').slice(0, -1).join(' ') || folder.name)}
                                     </h3>
                                     {folder.name !== 'Miscellaneous' && <p className="text-xs text-slate-500 font-mono">{folder.name.split('_').pop()}</p>}
                                 </div>

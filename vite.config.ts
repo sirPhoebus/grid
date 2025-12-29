@@ -49,7 +49,7 @@ export default defineConfig(({ mode }) => {
               const mediaDir = path.resolve(process.cwd(), 'media');
               const result: any = { sliced_img: [], upscale: [] };
 
-              const types = ['sliced_img', 'upscale', 'individual_upscale', 'turbowan', 'stitched', 'z_image'];
+              const types = ['sliced_img', 'upscale', 'individual_upscale', 'turbowan', 'stitched', 'z_image', 'inverse'];
               types.forEach(type => {
                 const typeDir = path.join(mediaDir, type);
                 if (fs.existsSync(typeDir)) {
@@ -257,6 +257,50 @@ export default defineConfig(({ mode }) => {
             }
           });
 
+          // Middleware to reverse video
+          server.middlewares.use('/reverse-video', (req, res, next) => {
+            if (req.method === 'POST') {
+              const chunks: Uint8Array[] = [];
+              req.on('data', chunk => chunks.push(chunk));
+              req.on('end', async () => {
+                try {
+                  const body = JSON.parse(Buffer.concat(chunks).toString());
+                  const { videoPath } = body; // Path relative to media/
+                  if (!videoPath) {
+                    res.statusCode = 400;
+                    res.end('Missing videoPath');
+                    return;
+                  }
+
+                  const fullVideoPath = path.join(process.cwd(), 'media', videoPath);
+                  const timestamp = Date.now();
+                  const filename = `reversed_${timestamp}.mp4`;
+                  const outputDir = path.join(process.cwd(), 'media', 'inverse');
+                  if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+                  const outputPath = path.join(outputDir, filename);
+
+                  const { exec } = await import('child_process');
+                  const { promisify } = await import('util');
+                  const execPromise = promisify(exec);
+
+                  // ffmpeg command to reverse video and audio
+                  // -vf reverse (video reverse)
+                  // -af areverse (audio reverse)
+                  await execPromise(`ffmpeg -i "${fullVideoPath}" -vf reverse -af areverse "${outputPath}" -y`);
+
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ url: `/media/inverse/${filename}` }));
+                } catch (e) {
+                  console.error("Reverse error", e);
+                  res.statusCode = 500;
+                  res.end('error');
+                }
+              });
+            } else {
+              next();
+            }
+          });
+
           // Middleware to save video from ComfyUI URL or external URL
           server.middlewares.use('/save-video', (req, res, next) => {
             if (req.method === 'POST') {
@@ -323,7 +367,7 @@ export default defineConfig(({ mode }) => {
                   }
 
                   const safeName = name.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
-                  const validTypes = ['sliced_img', 'upscale', 'individual_upscale', 'turbowan', 'stitched', 'z_image'];
+                  const validTypes = ['sliced_img', 'upscale', 'individual_upscale', 'turbowan', 'stitched', 'z_image', 'inverse'];
                   const safeType = validTypes.includes(type) ? type : 'upscale';
 
                   let targetPath;
