@@ -8,22 +8,59 @@ interface ZImageProps {
 }
 
 export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }) => {
-    const [params, setParams] = useState<ZImageParams>({
-        width: 1024,
-        height: 1536,
-        steps: 9,
-        prompt: "masterpiece, best quality, amazing quality, 4k, 8k, very aesthetic, high resolution, ultra-detailed, absurdres, scenery, photorealistic, 1girl, solo, (japanese:1.3) AND (korean:1.1) AND (french AND latin american:1.2), beautiful, cute, sharp face, long hair, brown hair, low ponytail, wavy hair, loosely tucked bangs, brown eyes, double eyelid, aegyo sal, upturned eyes, turning head, looking at viewer, seductive, blush, smile, closed mouth, nude, (round heavy perky fake natural extremely gigantic breasts with enormous bust and massive volume:1.5), (huge puffy nipples:1.5), pussy, fat mons, curvy, thick build, skinny, impossible body anatomy, squeezing own breasts with elbow, arched back, front, sideboob, cleavage, head tilt, from above, portrait, seducing, wet body, wet hair, dark black shower room, raw light, BREAK, detailed skin, depth of field, photorealistic details",
-        negative_prompt: "text, watermark, low quality",
-        cfg: 1,
-        sampler_name: 'res_multistep',
-        scheduler: 'simple'
+    const [params, setParams] = useState<ZImageParams>(() => {
+        const saved = localStorage.getItem('zimage_params');
+        if (saved) {
+            try {
+                return JSON.parse(saved);
+            } catch (e) {
+                console.error("Failed to parse saved params", e);
+            }
+        }
+        return {
+            width: 1024,
+            height: 1536,
+            steps: 9,
+            prompt: "18 yo girl with long black hair, big lips, eyes glowing naked, big breasts, long nipples",
+            negative_prompt: "text, watermark, low quality, Asian, Chinese, Korean, Japanese",
+            cfg: 1,
+            unet_model: "zImage_turbo.safetensors",
+            sampler_name: 'res_multistep',
+            scheduler: 'simple'
+        };
     });
 
+    // Persist params on change
+    useEffect(() => {
+        localStorage.setItem('zimage_params', JSON.stringify(params));
+    }, [params]);
+
     const [isGenerating, setIsGenerating] = useState(false);
-    const [resultImageUrl, setResultImageUrl] = useState<string | null>(null);
+    const [resultImageUrl, setResultImageUrl] = useState<string | null>(() => {
+        return localStorage.getItem('zimage_result');
+    });
+
+    useEffect(() => {
+        if (resultImageUrl) {
+            localStorage.setItem('zimage_result', resultImageUrl);
+        }
+    }, [resultImageUrl]);
+
     const [error, setError] = useState<string | null>(null);
     const [isLibraryOpen, setIsLibraryOpen] = useState(false);
     const [globalPrompts, setGlobalPrompts] = useState<string[]>([]);
+    const [isLoraModalOpen, setIsLoraModalOpen] = useState(false);
+    const [availableLoras, setAvailableLoras] = useState<string[]>([]);
+
+    useEffect(() => {
+        // Fetch LoRAs on mount
+        fetch('/list-loras')
+            .then(res => res.json())
+            .then(data => {
+                if (Array.isArray(data)) setAvailableLoras(data);
+            })
+            .catch(err => console.error("Failed to load LoRAs", err));
+    }, []);
 
     useEffect(() => {
         const stored = localStorage.getItem('global_prompt_library');
@@ -48,7 +85,6 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
     const handleGenerate = async () => {
         setIsGenerating(true);
         setError(null);
-        setResultImageUrl(null);
 
         try {
             const result = await ComfyUiService.runZImageWorkflow(params);
@@ -91,6 +127,50 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
                 onSelectPrompt={(p) => setParams(prev => ({ ...prev, prompt: p }))}
                 storageKey="global_prompt_library"
             />
+
+            {/* LoRA Selection Modal */}
+            {isLoraModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsLoraModalOpen(false)}>
+                    <div className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-3xl p-6 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-bold text-white">Select LoRA</h3>
+                            <button onClick={() => setIsLoraModalOpen(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                                <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                            {availableLoras.length === 0 ? (
+                                <div className="text-center py-8 text-slate-500">No LoRAs found</div>
+                            ) : (
+                                availableLoras.map((lora) => (
+                                    <button
+                                        key={lora}
+                                        onClick={() => {
+                                            const currentIdx = (params.loras || []).findIndex(l => l.name === lora);
+                                            if (currentIdx === -1) {
+                                                setParams(p => ({ ...p, loras: [...(p.loras || []), { name: lora, strength: 1.0 }] }));
+                                            }
+                                            setIsLoraModalOpen(false);
+                                        }}
+                                        className="w-full text-left p-3 rounded-xl bg-slate-800/50 hover:bg-purple-600/20 hover:border-purple-500/30 border border-transparent transition-all group"
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm font-medium text-slate-300 group-hover:text-purple-300 transition-colors truncate">
+                                                {lora.replace('.safetensors', '')}
+                                            </span>
+                                            {(params.loras || []).some(l => l.name === lora) && (
+                                                <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded uppercase font-bold">Applied</span>
+                                            )}
+                                        </div>
+                                    </button>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className={`max-w-6xl mx-auto py-8 px-6 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 transition-all ${isLibraryOpen ? 'pl-80 blur-[2px]' : ''}`}>
                 <div className="flex items-center justify-between">
@@ -189,7 +269,25 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
                                 <div className="space-y-2">
                                     <div className="flex justify-between items-center px-1">
                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Steps</label>
-                                        <span className="text-[10px] font-bold text-cyan-400">{params.steps}</span>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => setParams(p => ({ ...p, steps: Math.max(1, p.steps - 1) }))}
+                                                className="w-4 h-4 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"
+                                            >
+                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M20 12H4" />
+                                                </svg>
+                                            </button>
+                                            <span className="text-[10px] font-bold text-cyan-400 w-4 text-center">{params.steps}</span>
+                                            <button
+                                                onClick={() => setParams(p => ({ ...p, steps: Math.min(30, p.steps + 1) }))}
+                                                className="w-4 h-4 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"
+                                            >
+                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </div>
                                     <input
                                         type="range"
@@ -203,7 +301,25 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
                                 <div className="space-y-2">
                                     <div className="flex justify-between items-center px-1">
                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CFG</label>
-                                        <span className="text-[10px] font-bold text-purple-400">{params.cfg || 1}</span>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => setParams(p => ({ ...p, cfg: Math.max(1, parseFloat(((p.cfg || 1) - 0.1).toFixed(1))) }))}
+                                                className="w-4 h-4 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"
+                                            >
+                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M20 12H4" />
+                                                </svg>
+                                            </button>
+                                            <span className="text-[10px] font-bold text-purple-400 w-6 text-center">{params.cfg || 1}</span>
+                                            <button
+                                                onClick={() => setParams(p => ({ ...p, cfg: Math.min(7, parseFloat(((p.cfg || 1) + 0.1).toFixed(1))) }))}
+                                                className="w-4 h-4 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"
+                                            >
+                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </div>
                                     <input
                                         type="range"
@@ -217,6 +333,69 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
                                 </div>
                             </div>
 
+                            {/* LoRA Section */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">LoRAs</label>
+                                    <button
+                                        onClick={() => setIsLoraModalOpen(true)}
+                                        className="p-1 px-2 bg-slate-800 hover:bg-purple-500/20 hover:text-purple-400 rounded-lg text-slate-400 transition-all flex items-center gap-2"
+                                        title="Add LoRA"
+                                    >
+                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        <span className="text-[9px] font-black uppercase tracking-widest">Add</span>
+                                    </button>
+                                </div>
+                                {params.loras && params.loras.length > 0 ? (
+                                    <div className="space-y-2">
+                                        {params.loras.map((lora, idx) => (
+                                            <div key={idx} className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 flex flex-col gap-2">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-bold text-slate-300 truncate max-w-[180px]" title={lora.name}>
+                                                        {lora.name.replace('.safetensors', '')}
+                                                    </span>
+                                                    <button
+                                                        onClick={() => {
+                                                            const newLoras = [...(params.loras || [])];
+                                                            newLoras.splice(idx, 1);
+                                                            setParams({ ...params, loras: newLoras });
+                                                        }}
+                                                        className="text-slate-500 hover:text-red-400 transition-colors"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-[9px] uppercase font-bold text-slate-500 w-8">Str</span>
+                                                    <input
+                                                        type="range"
+                                                        min="0"
+                                                        max="2"
+                                                        step="0.05"
+                                                        value={lora.strength}
+                                                        onChange={(e) => {
+                                                            const newLoras = [...(params.loras || [])];
+                                                            newLoras[idx] = { ...lora, strength: parseFloat(e.target.value) };
+                                                            setParams({ ...params, loras: newLoras });
+                                                        }}
+                                                        className="flex-1 accent-purple-500 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                                                    />
+                                                    <span className="text-[9px] font-mono font-bold text-purple-400 w-8 text-right">{lora.strength.toFixed(2)}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center p-4 border border-dashed border-slate-800 rounded-xl text-slate-600 text-xs">
+                                        No LoRAs applied
+                                    </div>
+                                )}
+                            </div>
+
                             {/* Negative Prompt */}
                             <div className="space-y-2">
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Negative Prompt</label>
@@ -226,6 +405,19 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
                                     className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-red-500/50 transition-all resize-none h-20"
                                     placeholder="What to avoid..."
                                 />
+                            </div>
+
+                            {/* Model Selection */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">UNET Model</label>
+                                <select
+                                    value={params.unet_model || "zImage_turbo.safetensors"}
+                                    onChange={(e) => setParams({ ...params, unet_model: e.target.value })}
+                                    className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500 appearance-none"
+                                >
+                                    <option value="zImage_turbo.safetensors">Z-Image Turbo</option>
+                                    <option value="novaRealityZI_v15Turbo.safetensors">Nova Reality v1.5 Turbo</option>
+                                </select>
                             </div>
 
                             {/* Sampler & Scheduler */}
@@ -280,28 +472,18 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
                     <div className="lg:col-span-8 flex flex-col gap-4">
                         <div className="flex-1 bg-slate-900/30 border border-slate-800 rounded-3xl overflow-hidden relative group min-h-[512px] flex items-center justify-center p-4">
                             {resultImageUrl ? (
-                                <img
-                                    src={resultImageUrl}
-                                    alt="Generated Result"
-                                    className="max-w-full max-h-full object-contain rounded-xl shadow-2xl animate-in fade-in zoom-in-95 duration-700"
-                                />
-                            ) : isGenerating ? (
-                                <div className="flex flex-col items-center gap-6">
-                                    <div className="relative">
-                                        <div className="w-20 h-20 border-2 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin" />
-                                        <div className="absolute inset-0 flex items-center justify-center">
-                                            <div className="w-12 h-12 bg-cyan-500/10 rounded-full animate-pulse" />
+                                <>
+                                    <img
+                                        src={resultImageUrl}
+                                        alt="Generated Result"
+                                        className="max-w-full max-h-full object-contain rounded-xl shadow-2xl animate-in fade-in zoom-in-95 duration-700"
+                                    />
+                                    {isGenerating && (
+                                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-cyan-600/90 backdrop-blur-sm rounded-xl text-white text-xs font-bold uppercase tracking-wider shadow-xl">
+                                            Generating...
                                         </div>
-                                    </div>
-                                    <div className="text-center">
-                                        <span className="text-cyan-400 font-black uppercase tracking-[0.4em] text-[10px]">Processing Lumina2</span>
-                                        <div className="mt-2 flex justify-center gap-1">
-                                            <div className="w-1 h-1 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                            <div className="w-1 h-1 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                            <div className="w-1 h-1 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                                        </div>
-                                    </div>
-                                </div>
+                                    )}
+                                </>
                             ) : (
                                 <div className="text-center space-y-4 opacity-30 group-hover:opacity-50 transition-opacity">
                                     <svg className="w-24 h-24 text-slate-600 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -52,6 +52,18 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
             });
     }, []);
 
+    // ESC key handler to close modal - MUST be before early return
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && selectedMedia) {
+                setSelectedMedia(null);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedMedia]);
+
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-[50vh]">
@@ -348,28 +360,33 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
 
                         {/* Action Buttons */}
                         <div className="flex flex-row md:flex-col gap-4 min-w-[200px]">
-                            {onSendToTurbo && (
-                                <button
-                                    onClick={() => onSendToTurbo({ imageUrl: selectedMedia, prompt: "From Gallery" })}
-                                    className="flex items-center gap-3 px-6 py-4 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white font-bold text-sm backdrop-blur-md border border-white/10 transition-all shadow-xl active:scale-95 w-full justify-center group"
-                                >
-                                    <svg className="w-5 h-5 group-hover:animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                    </svg>
-                                    Use in TurboWan
-                                </button>
-                            )}
-                            {onSendToUpscale && (
-                                <button
-                                    onClick={() => onSendToUpscale(selectedMedia, "From Gallery")}
-                                    className="flex items-center gap-3 px-6 py-4 bg-cyan-600 hover:bg-cyan-500 rounded-xl text-white font-bold text-sm backdrop-blur-md border border-white/10 transition-all shadow-xl active:scale-95 w-full justify-center group"
-                                >
-                                    <svg className="w-5 h-5 group-hover:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                                    </svg>
-                                    Upscale Image
-                                </button>
-                            )}
+                            <button
+                                onClick={() => {
+                                    if (onSendToTurbo) {
+                                        onSendToTurbo({ imageUrl: selectedMedia, prompt: "From Gallery" });
+                                    }
+                                }}
+                                className="flex items-center gap-3 px-6 py-4 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white font-bold text-sm backdrop-blur-md border border-white/10 transition-all shadow-xl active:scale-95 w-full justify-center group"
+                            >
+                                <svg className="w-5 h-5 group-hover:animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                                Use in TurboWan
+                            </button>
+
+                            <button
+                                onClick={() => {
+                                    if (onSendToUpscale) {
+                                        onSendToUpscale(selectedMedia, "From Gallery");
+                                    }
+                                }}
+                                className="flex items-center gap-3 px-6 py-4 bg-cyan-600 hover:bg-cyan-500 rounded-xl text-white font-bold text-sm backdrop-blur-md border border-white/10 transition-all shadow-xl active:scale-95 w-full justify-center group"
+                            >
+                                <svg className="w-5 h-5 group-hover:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                                </svg>
+                                Upscale Image
+                            </button>
                         </div>
                     </div>
                 </div>

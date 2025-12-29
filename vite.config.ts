@@ -412,6 +412,32 @@ export default defineConfig(({ mode }) => {
             }
           });
 
+          server.middlewares.use('/list-loras', (req, res, next) => {
+            if (req.method === 'GET') {
+              const loraDir = 'D:\\comfui-Python3.12\\ComfyUI\\models\\loras';
+              try {
+                if (!fs.existsSync(loraDir)) {
+                  console.warn(`LoRA directory not found: ${loraDir}`);
+                  res.statusCode = 200;
+                  res.end(JSON.stringify([]));
+                  return;
+                }
+
+                const files = fs.readdirSync(loraDir);
+                const loras = files.filter(f => f.endsWith('.safetensors'));
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify(loras));
+              } catch (e) {
+                console.error("Failed to list LoRAs", e);
+                res.statusCode = 500;
+                res.end(JSON.stringify({ error: 'Failed to list LoRAs' }));
+              }
+            } else {
+              next();
+            }
+          });
+
           server.middlewares.use('/save-slice', (req, res, next) => {
             if (req.method === 'POST') {
               // console.log("Received /save-slice request");

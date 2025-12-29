@@ -5,6 +5,8 @@ export interface ZImageParams {
     prompt: string;
     negative_prompt?: string;
     cfg?: number;
+    loras?: { name: string; strength: number }[];
+    unet_model?: string;
     sampler_name: 'euler' | 'res_multistep';
     scheduler: 'beta' | 'simple';
 }
@@ -379,7 +381,9 @@ export class ComfyUiService {
     }
 
     static getZImageWorkflow(params: ZImageParams) {
-        return {
+        // Base workflow connections
+        let currentModelInput = ["46", 0]; // Start with UNET output
+        const nodes: any = {
             "9": {
                 "inputs": {
                     "filename_prefix": "z-image",
@@ -455,7 +459,7 @@ export class ComfyUiService {
             },
             "46": {
                 "inputs": {
-                    "unet_name": "zImage_turbo.safetensors",
+                    "unet_name": params.unet_model || "zImage_turbo.safetensors",
                     "weight_dtype": "default"
                 },
                 "class_type": "UNETLoader",
@@ -464,12 +468,37 @@ export class ComfyUiService {
             "47": {
                 "inputs": {
                     "shift": 3,
-                    "model": ["46", 0]
+                    "model": null // Will be connected later
                 },
                 "class_type": "ModelSamplingAuraFlow",
                 "_meta": { "title": "ModelSamplingAuraFlow" }
             }
         };
+
+        // Chain LoRAs if present
+        let nextNodeId = 100;
+        if (params.loras && params.loras.length > 0) {
+            params.loras.forEach(lora => {
+                if (!lora.name) return;
+                const nodeId = nextNodeId.toString();
+                nodes[nodeId] = {
+                    "inputs": {
+                        "lora_name": lora.name,
+                        "strength_model": lora.strength,
+                        "model": currentModelInput
+                    },
+                    "class_type": "LoraLoaderModelOnly",
+                    "_meta": { "title": `LoRA: ${lora.name}` }
+                };
+                currentModelInput = [nodeId, 0];
+                nextNodeId++;
+            });
+        }
+
+        // Connect Final Model Output to AuraFlow
+        nodes["47"].inputs.model = currentModelInput;
+
+        return nodes;
     }
 
     static async runZImageWorkflow(params: ZImageParams): Promise<{ imageUrl: string }> {
