@@ -164,7 +164,7 @@ const ImageOverlay: React.FC<{ url: string; onClose: () => void }> = ({ url, onC
 );
 
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor' | 'reverse' | 'help'>('z-image');
   const [turboHandover, setTurboHandover] = useState<{ imageUrl: string, prompt: string } | null>(null);
   const [hasKey, setHasKey] = useState<boolean>(false);
   const [individualState, setIndividualState] = useState<{
@@ -889,6 +889,7 @@ const App: React.FC = () => {
               });
               setCurrentView('upscale');
             }}
+            onPreviewImage={setOverlayUrl}
           />
         ) : currentView === 'extractor' ? (
           <FrameExtractor

@@ -10,6 +10,7 @@ export interface ZImageParams {
     sampler_name: 'euler' | 'res_multistep';
     scheduler: 'beta' | 'simple';
     depth_image?: string; // Optional depth image (base64 or blob URL)
+    depth_strength?: number; // Strength of the depth control
 }
 
 export class ComfyUiService {
@@ -483,7 +484,7 @@ export class ComfyUiService {
             },
             "70:60": {
                 "inputs": {
-                    "strength": 1,
+                    "strength": params.depth_strength ?? 1,
                     "model": null, // Will be connected with LoRAs
                     "model_patch": ["70:64", 0],
                     "vae": ["70:40", 0],

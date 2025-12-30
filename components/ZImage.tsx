@@ -5,9 +5,10 @@ import { PromptLibrary, addPromptToLibrary } from './PromptLibrary';
 interface ZImageProps {
     onSendToTurbo?: (data: { imageUrl: string, prompt: string }) => void;
     onSendToUpscale?: (imageUrl: string, prompt: string) => void;
+    onPreviewImage?: (url: string) => void;
 }
 
-export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }) => {
+export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale, onPreviewImage }) => {
     const [params, setParams] = useState<ZImageParams>(() => {
         const saved = localStorage.getItem('zimage_params');
         if (saved) {
@@ -26,7 +27,8 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
             cfg: 1,
             unet_model: "zImage_turbo.safetensors",
             sampler_name: 'res_multistep',
-            scheduler: 'simple'
+            scheduler: 'simple',
+            depth_strength: 1.0
         };
     });
 
@@ -245,6 +247,25 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
                                     className="w-full bg-slate-950/50 border border-slate-800 rounded-2xl p-5 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-all resize-none h-64 leading-relaxed font-medium"
                                     placeholder="Describe the image artifact in detail..."
                                 />
+                                <button
+                                    onClick={handleGenerate}
+                                    disabled={isGenerating || !params.prompt}
+                                    className="w-full py-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-black uppercase tracking-[0.2em] text-xs rounded-2xl shadow-lg shadow-cyan-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 active:scale-[0.98] mt-2"
+                                >
+                                    {isGenerating ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                            Generating...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                            </svg>
+                                            Create Artifact
+                                        </>
+                                    )}
+                                </button>
                             </div>
 
                             {/* Dimensions */}
@@ -426,13 +447,37 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
                                         </button>
                                     )}
                                 </div>
-                                <div className="relative">
+                                <div className="space-y-4">
                                     {depthImageUrl ? (
-                                        <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 flex items-center gap-3">
-                                            <img src={depthImageUrl} alt="Depth" className="w-16 h-16 object-cover rounded-lg" />
-                                            <div className="flex-1">
-                                                <p className="text-xs text-green-400 font-bold">Depth Image Loaded</p>
-                                                <p className="text-[10px] text-slate-500 mt-0.5">Using depth-based controlnet workflow</p>
+                                        <div className="space-y-4">
+                                            <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 flex items-center gap-3">
+                                                <img src={depthImageUrl} alt="Depth" className="w-16 h-16 object-cover rounded-lg" />
+                                                <div className="flex-1">
+                                                    <p className="text-xs text-green-400 font-bold">Depth Image Loaded</p>
+                                                    <p className="text-[10px] text-slate-500 mt-0.5">Using depth-based controlnet workflow</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Depth Strength Slider */}
+                                            <div className="space-y-2 p-3 bg-slate-950/30 border border-slate-800/50 rounded-xl">
+                                                <div className="flex justify-between items-center px-1">
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Depth Strength</label>
+                                                    <span className="text-[10px] font-bold text-cyan-400 font-mono">{(params.depth_strength ?? 1.0).toFixed(2)}</span>
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min="0.05"
+                                                    max="1.5"
+                                                    step="0.05"
+                                                    value={params.depth_strength ?? 1.0}
+                                                    onChange={(e) => setParams({ ...params, depth_strength: parseFloat(e.target.value) })}
+                                                    className="w-full accent-cyan-500 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                                                />
+                                                <div className="flex justify-between px-1 text-[8px] text-slate-600 font-bold uppercase tracking-tighter">
+                                                    <span>Subtle</span>
+                                                    <span>Standard</span>
+                                                    <span>Force</span>
+                                                </div>
                                             </div>
                                         </div>
                                     ) : (
@@ -505,31 +550,15 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
                                 </div>
                             </div>
 
-                            <button
-                                onClick={handleGenerate}
-                                disabled={isGenerating || !params.prompt}
-                                className="w-full py-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-black uppercase tracking-[0.2em] text-xs rounded-2xl shadow-lg shadow-cyan-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 active:scale-[0.98]"
-                            >
-                                {isGenerating ? (
-                                    <>
-                                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                                        Generating...
-                                    </>
-                                ) : (
-                                    <>
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                        </svg>
-                                        Create Artifact
-                                    </>
-                                )}
-                            </button>
                         </div>
                     </div>
 
                     {/* VIEWPORT PANEL */}
                     <div className="lg:col-span-8 flex flex-col gap-4">
-                        <div className="flex-1 bg-slate-900/30 border border-slate-800 rounded-3xl overflow-hidden relative group min-h-[512px] flex items-center justify-center p-4">
+                        <div
+                            className={`flex-1 bg-slate-900/30 border border-slate-800 rounded-3xl overflow-hidden relative group min-h-[512px] flex items-center justify-center p-4 transition-all ${resultImageUrl ? 'cursor-zoom-in hover:border-cyan-500/30' : ''}`}
+                            onClick={() => resultImageUrl && onPreviewImage?.(resultImageUrl)}
+                        >
                             {resultImageUrl ? (
                                 <>
                                     <img
@@ -537,6 +566,11 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
                                         alt="Generated Result"
                                         className="max-w-full max-h-full object-contain rounded-xl shadow-2xl animate-in fade-in zoom-in-95 duration-700"
                                     />
+                                    <div className="absolute inset-0 bg-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                                        <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-white text-xs font-bold uppercase tracking-widest translate-y-4 group-hover:translate-y-0 transition-all duration-500">
+                                            Click to Preview
+                                        </div>
+                                    </div>
                                     {isGenerating && (
                                         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-cyan-600/90 backdrop-blur-sm rounded-xl text-white text-xs font-bold uppercase tracking-wider shadow-xl">
                                             Generating...
@@ -553,42 +587,53 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
                             )}
 
                             {resultImageUrl && (
-                                <div className="absolute top-4 right-4 flex gap-3">
-                                    {onSendToTurbo && (
-                                        <button
-                                            onClick={() => onSendToTurbo({ imageUrl: resultImageUrl, prompt: params.prompt })}
-                                            className="flex items-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-2xl text-white font-bold text-xs backdrop-blur-md border border-white/10 transition-all shadow-xl active:scale-95 group/anim"
-                                        >
-                                            <svg className="w-4 h-4 group-hover:animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                            </svg>
-                                            Animate in TurboWan
-                                        </button>
-                                    )}
-                                    {onSendToUpscale && (
-                                        <button
-                                            onClick={() => onSendToUpscale(resultImageUrl, params.prompt)}
-                                            className="flex items-center gap-2 px-4 py-3 bg-cyan-600 hover:bg-cyan-500 rounded-2xl text-white font-bold text-xs backdrop-blur-md border border-white/10 transition-all shadow-xl active:scale-95 group/upscale"
-                                        >
-                                            <svg className="w-4 h-4 group-hover:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                                            </svg>
-                                            Send to Upscale
-                                        </button>
-                                    )}
-                                    <a
-                                        href={resultImageUrl}
-                                        download="z-image.png"
-                                        className="p-3 bg-black/60 hover:bg-slate-700 rounded-2xl text-white backdrop-blur-md border border-white/10 transition-all shadow-xl"
-                                        title="Download Image"
-                                    >
-                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                        </svg>
-                                    </a>
+                                <div className="absolute top-4 right-4 animate-in fade-in duration-500">
+                                    <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
+                                        {/* Status indicator or something subtle can go here if needed, 
+                                            but we are moving the main buttons below */}
+                                    </div>
                                 </div>
                             )}
                         </div>
+
+                        {/* Action Buttons Below Image */}
+                        {resultImageUrl && (
+                            <div className="flex flex-wrap items-center justify-center gap-4 animate-in slide-in-from-bottom-2 duration-500">
+                                {onSendToTurbo && (
+                                    <button
+                                        onClick={() => onSendToTurbo({ imageUrl: resultImageUrl, prompt: params.prompt })}
+                                        className="flex items-center gap-3 px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-[0.2em] rounded-2xl shadow-xl shadow-indigo-500/20 transition-all active:scale-95 group/anim border border-white/10"
+                                    >
+                                        <svg className="w-5 h-5 group-hover:animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                        </svg>
+                                        Animate in TurboWan
+                                    </button>
+                                )}
+                                {onSendToUpscale && (
+                                    <button
+                                        onClick={() => onSendToUpscale(resultImageUrl, params.prompt)}
+                                        className="flex items-center gap-3 px-8 py-4 bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs uppercase tracking-[0.2em] rounded-2xl shadow-xl shadow-cyan-500/20 transition-all active:scale-95 group/upscale border border-white/10"
+                                    >
+                                        <svg className="w-5 h-5 group-hover:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                                        </svg>
+                                        Send to Upscale
+                                    </button>
+                                )}
+                                <a
+                                    href={resultImageUrl}
+                                    download="z-image.png"
+                                    className="flex items-center gap-3 px-6 py-4 bg-slate-800 hover:bg-slate-700 text-white font-black text-xs uppercase tracking-[0.2em] rounded-2xl shadow-xl transition-all active:scale-95 border border-white/10"
+                                    title="Download Image"
+                                >
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                    </svg>
+                                    Download
+                                </a>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
