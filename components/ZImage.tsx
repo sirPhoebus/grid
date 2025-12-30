@@ -51,6 +51,7 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
     const [globalPrompts, setGlobalPrompts] = useState<string[]>([]);
     const [isLoraModalOpen, setIsLoraModalOpen] = useState(false);
     const [availableLoras, setAvailableLoras] = useState<string[]>([]);
+    const [depthImageUrl, setDepthImageUrl] = useState<string | null>(null);
 
     useEffect(() => {
         // Fetch LoRAs on mount
@@ -80,6 +81,19 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
         // Refresh local list
         const stored = localStorage.getItem('global_prompt_library');
         if (stored) setGlobalPrompts(JSON.parse(stored));
+    };
+
+    const handleDepthImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const base64 = event.target?.result as string;
+            setDepthImageUrl(base64);
+            setParams(prev => ({ ...prev, depth_image: base64 }));
+        };
+        reader.readAsDataURL(file);
     };
 
     const handleGenerate = async () => {
@@ -394,6 +408,51 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale }
                                         No LoRAs applied
                                     </div>
                                 )}
+                            </div>
+
+                            {/* Depth Image Upload */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Depth Image (Optional)</label>
+                                    {depthImageUrl && (
+                                        <button
+                                            onClick={() => {
+                                                setDepthImageUrl(null);
+                                                setParams(prev => ({ ...prev, depth_image: undefined }));
+                                            }}
+                                            className="p-1 px-2 bg-red-500/10 text-red-400 rounded-lg text-[9px] font-bold uppercase tracking-widest border border-red-500/20 hover:bg-red-500/20 transition-all"
+                                        >
+                                            Clear
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="relative">
+                                    {depthImageUrl ? (
+                                        <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 flex items-center gap-3">
+                                            <img src={depthImageUrl} alt="Depth" className="w-16 h-16 object-cover rounded-lg" />
+                                            <div className="flex-1">
+                                                <p className="text-xs text-green-400 font-bold">Depth Image Loaded</p>
+                                                <p className="text-[10px] text-slate-500 mt-0.5">Using depth-based controlnet workflow</p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <label className="block cursor-pointer">
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleDepthImageUpload}
+                                                className="hidden"
+                                            />
+                                            <div className="w-full bg-slate-950/50 border border-dashed border-slate-800 rounded-xl p-4 text-center hover:border-cyan-500/30 hover:bg-slate-900/50 transition-all">
+                                                <svg className="w-8 h-8 text-slate-600 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                                </svg>
+                                                <p className="text-xs text-slate-500">Upload depth reference image</p>
+                                                <p className="text-[9px] text-slate-600 mt-1">Leave empty for standard workflow</p>
+                                            </div>
+                                        </label>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Negative Prompt */}

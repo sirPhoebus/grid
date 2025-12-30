@@ -25,10 +25,12 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
     const [data, setData] = useState<MediaData>({
         sliced_img: [], upscale: [], individual_upscale: [], turbowan: [], stitched: [], z_image: [], inverse: []
     });
-    const [activeTab, setActiveTab] = useState<'sliced_img' | 'upscale' | 'individual_upscale' | 'turbowan' | 'stitched' | 'z_image' | 'inverse'>('stitched');
+    const [activeTab, setActiveTab] = useState<'sliced_img' | 'upscale' | 'individual_upscale' | 'turbowan' | 'stitched' | 'z_image' | 'inverse'>('z_image');
     const [loading, setLoading] = useState(true);
     const [selectedMedia, setSelectedMedia] = useState<string | null>(null);
     const [isMediaVideo, setIsMediaVideo] = useState(false);
+    const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+    const [isSelectionMode, setIsSelectionMode] = useState(false);
 
     useEffect(() => {
         fetch('/list-media')
@@ -130,8 +132,110 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
         }
     };
 
+    const handleDeleteSelected = async () => {
+        if (selectedFiles.size === 0) return;
+        if (!confirm(`Are you sure you want to delete ${selectedFiles.size} selected item(s)?`)) return;
+
+        try {
+            // Delete all selected files
+            const deletePromises = Array.from(selectedFiles).map(fileUrl => {
+                const parts = (fileUrl as string).split('/');
+                const fileName = parts.pop()!;
+                const folderName = parts.pop()!;
+
+                return fetch('/delete-media', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: activeTab,
+                        name: folderName,
+                        file: fileName
+                    })
+                });
+            });
+
+            await Promise.all(deletePromises);
+
+            // Refresh and clear selection
+            setLoading(true);
+            const res = await fetch('/list-media');
+            const newData = await res.json();
+            setData(newData);
+            setSelectedFiles(new Set());
+            setIsSelectionMode(false);
+            setLoading(false);
+        } catch (e) {
+            console.error("Batch delete failed", e);
+            alert("Failed to delete selected items");
+        }
+    };
+
+    const toggleFileSelection = (fileUrl: string) => {
+        const newSelection = new Set(selectedFiles);
+        if (newSelection.has(fileUrl)) {
+            newSelection.delete(fileUrl);
+        } else {
+            newSelection.add(fileUrl);
+        }
+        setSelectedFiles(newSelection);
+    };
+
+    const selectAll = () => {
+        const allFiles = new Set<string>();
+        activeData.forEach(folder => {
+            folder.files.forEach(file => allFiles.add(file.url));
+        });
+        setSelectedFiles(allFiles);
+    };
+
+    const clearSelection = () => {
+        setSelectedFiles(new Set());
+        setIsSelectionMode(false);
+    };
+
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
+            {/* Selection Mode Controls */}
+            {isSelectionMode && (
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                        <div className="text-sm text-slate-300">
+                            <span className="font-bold text-cyan-400">{selectedFiles.size}</span> item(s) selected
+                        </div>
+                        <button
+                            onClick={selectAll}
+                            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-all"
+                        >
+                            Select All
+                        </button>
+                        <button
+                            onClick={clearSelection}
+                            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-all"
+                        >
+                            Clear Selection
+                        </button>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={handleDeleteSelected}
+                            disabled={selectedFiles.size === 0}
+                            className="px-6 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-bold transition-all flex items-center gap-2"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Delete Selected
+                        </button>
+                        <button
+                            onClick={() => setIsSelectionMode(false)}
+                            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-all"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            )}
+
             <div className="flex justify-center mb-8">
                 <div className="bg-slate-900 border border-slate-800 p-1 rounded-xl inline-flex flex-wrap gap-1 justify-center">
                     <button
@@ -200,6 +304,21 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                 </div>
             </div>
 
+            {/* Enable/Disable Selection Mode Button */}
+            {activeData.length > 0 && !isSelectionMode && (
+                <div className="flex justify-end">
+                    <button
+                        onClick={() => setIsSelectionMode(true)}
+                        className="px-6 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-sm font-bold transition-all flex items-center gap-2 shadow-lg"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                        </svg>
+                        Multi-Select
+                    </button>
+                </div>
+            )}
+
             {activeData.length === 0 ? (
                 <div className="text-center py-20 bg-slate-900/50 rounded-3xl border border-slate-800 border-dashed">
                     <p className="text-slate-500">No media found in this category.</p>
@@ -242,16 +361,40 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                                 {folder.files.map((fileObj, idx) => {
                                     const file = fileObj.url;
                                     const isVideo = file.endsWith('.mp4') || file.endsWith('.webm');
+                                    const isSelected = selectedFiles.has(file);
                                     return (
                                         <div
                                             key={idx}
-                                            className="bg-slate-800 rounded-2xl overflow-hidden border border-slate-700 relative group cursor-pointer transition-all hover:ring-2 hover:ring-indigo-500/50 shadow-lg"
+                                            className={`bg-slate-800 rounded-2xl overflow-hidden border relative group cursor-pointer transition-all shadow-lg ${isSelected
+                                                ? 'border-cyan-500 ring-2 ring-cyan-500/50'
+                                                : 'border-slate-700 hover:ring-2 hover:ring-indigo-500/50'
+                                                }`}
                                             onClick={() => {
-                                                setSelectedMedia(file);
-                                                setIsMediaVideo(isVideo);
+                                                if (isSelectionMode) {
+                                                    toggleFileSelection(file);
+                                                } else {
+                                                    setSelectedMedia(file);
+                                                    setIsMediaVideo(isVideo);
+                                                }
                                             }}
                                         >
                                             <div className="relative">
+                                                {/* Selection Checkbox */}
+                                                {isSelectionMode && (
+                                                    <div className="absolute top-2 left-2 z-10">
+                                                        <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${isSelected
+                                                            ? 'bg-cyan-500 border-cyan-500'
+                                                            : 'bg-black/60 border-white/40 backdrop-blur-sm'
+                                                            }`}>
+                                                            {isSelected && (
+                                                                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                                </svg>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 {isVideo ? (
                                                     <video
                                                         src={file}
@@ -273,46 +416,48 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                                                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors pointer-events-none" />
 
                                                 {activeTab === 'stitched' && fileObj.duration && (
-                                                    <div className="absolute top-2 right-2 px-2 py-0.5 bg-black/60 rounded text-[10px] font-bold text-white shadow-lg backdrop-blur-sm border border-white/10">
+                                                    <div className={`absolute top-2 right-2 px-2 py-0.5 bg-black/60 rounded text-[10px] font-bold text-white shadow-lg backdrop-blur-sm border border-white/10 ${isSelectionMode ? 'opacity-50' : ''}`}>
                                                         {fileObj.duration}
                                                     </div>
                                                 )}
 
-                                                {fileObj.time && (
+                                                {fileObj.time && !isSelectionMode && (
                                                     <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 rounded text-[10px] font-bold text-white shadow-lg backdrop-blur-sm border border-white/10">
                                                         {new Date(fileObj.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                                                     </div>
                                                 )}
 
-                                                <div className="absolute bottom-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleDeleteFile(folder.name, file);
-                                                        }}
-                                                        className="bg-black/60 p-2 rounded-lg text-white hover:bg-red-600 transition-all backdrop-blur-md border border-white/10"
-                                                        title="Delete Item"
-                                                    >
-                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                        </svg>
-                                                    </button>
-                                                    <a
-                                                        href={file}
-                                                        download
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        className="bg-black/60 p-2 rounded-lg text-white hover:bg-indigo-600 transition-all backdrop-blur-md border border-white/10"
-                                                    >
-                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                                        </svg>
-                                                    </a>
-                                                    <div className="bg-indigo-600 p-2 rounded-lg text-white backdrop-blur-md border border-white/10 shadow-lg shadow-indigo-500/20">
-                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                                                        </svg>
+                                                {!isSelectionMode && (
+                                                    <div className="absolute bottom-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDeleteFile(folder.name, file);
+                                                            }}
+                                                            className="bg-black/60 p-2 rounded-lg text-white hover:bg-red-600 transition-all backdrop-blur-md border border-white/10"
+                                                            title="Delete Item"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                            </svg>
+                                                        </button>
+                                                        <a
+                                                            href={file}
+                                                            download
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="bg-black/60 p-2 rounded-lg text-white hover:bg-indigo-600 transition-all backdrop-blur-md border border-white/10"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                            </svg>
+                                                        </a>
+                                                        <div className="bg-indigo-600 p-2 rounded-lg text-white backdrop-blur-md border border-white/10 shadow-lg shadow-indigo-500/20">
+                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                                                            </svg>
+                                                        </div>
                                                     </div>
-                                                </div>
+                                                )}
                                             </div>
                                         </div>
                                     );

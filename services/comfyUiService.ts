@@ -9,6 +9,7 @@ export interface ZImageParams {
     unet_model?: string;
     sampler_name: 'euler' | 'res_multistep';
     scheduler: 'beta' | 'simple';
+    depth_image?: string; // Optional depth image (base64 or blob URL)
 }
 
 export class ComfyUiService {
@@ -380,6 +381,217 @@ export class ComfyUiService {
         return URL.createObjectURL(blob);
     }
 
+    static getZImageDepthWorkflow(params: ZImageParams, depthImageFilename: string) {
+        // New depth-based workflow with controlnet
+        let currentModelInput = ["70:46", 0]; // Start with UNET output
+        const nodes: any = {
+            "9": {
+                "inputs": {
+                    "filename_prefix": "z-image-turbo",
+                    "images": ["70:84", 0]
+                },
+                "class_type": "SaveImage",
+                "_meta": { "title": "Save Image" }
+            },
+            "56": {
+                "inputs": {
+                    "images": ["72", 0]
+                },
+                "class_type": "PreviewImage",
+                "_meta": { "title": "Preview Image" }
+            },
+            "58": {
+                "inputs": {
+                    "image": depthImageFilename
+                },
+                "class_type": "LoadImage",
+                "_meta": { "title": "Load Image" }
+            },
+            "62": {
+                "inputs": {
+                    "upscale_method": "lanczos",
+                    "largest_size": 1024,
+                    "image": ["58", 0]
+                },
+                "class_type": "ImageScaleToMaxDimension",
+                "_meta": { "title": "ImageScaleToMaxDimension" }
+            },
+            "72": {
+                "inputs": {
+                    "ckpt_name": "depth_anything_v2_vitl.pth",
+                    "resolution": 1024,
+                    "image": ["62", 0]
+                },
+                "class_type": "DepthAnythingV2Preprocessor",
+                "_meta": { "title": "Depth Anything V2 - Relative" }
+            },
+            "70:39": {
+                "inputs": {
+                    "clip_name": "qwen_3_4b.safetensors",
+                    "type": "lumina2",
+                    "device": "default"
+                },
+                "class_type": "CLIPLoader",
+                "_meta": { "title": "Load CLIP" }
+            },
+            "70:40": {
+                "inputs": {
+                    "vae_name": "ae.safetensors"
+                },
+                "class_type": "VAELoader",
+                "_meta": { "title": "Load VAE" }
+            },
+            "70:41": {
+                "inputs": {
+                    "width": ["70:69", 0],
+                    "height": ["70:69", 1],
+                    "batch_size": 1
+                },
+                "class_type": "EmptySD3LatentImage",
+                "_meta": { "title": "EmptySD3LatentImage" }
+            },
+            "70:42": {
+                "inputs": {
+                    "conditioning": ["70:45", 0]
+                },
+                "class_type": "ConditioningZeroOut",
+                "_meta": { "title": "ConditioningZeroOut" }
+            },
+            "70:45": {
+                "inputs": {
+                    "text": params.prompt,
+                    "clip": ["70:39", 0]
+                },
+                "class_type": "CLIPTextEncode",
+                "_meta": { "title": "CLIP Text Encode (Prompt)" }
+            },
+            "70:46": {
+                "inputs": {
+                    "unet_name": params.unet_model || "zImage_turbo.safetensors",
+                    "weight_dtype": "default"
+                },
+                "class_type": "UNETLoader",
+                "_meta": { "title": "Load Diffusion Model" }
+            },
+            "70:47": {
+                "inputs": {
+                    "shift": 3,
+                    "model": ["70:60", 0]
+                },
+                "class_type": "ModelSamplingAuraFlow",
+                "_meta": { "title": "ModelSamplingAuraFlow" }
+            },
+            "70:60": {
+                "inputs": {
+                    "strength": 1,
+                    "model": null, // Will be connected with LoRAs
+                    "model_patch": ["70:64", 0],
+                    "vae": ["70:40", 0],
+                    "image": ["72", 0]
+                },
+                "class_type": "QwenImageDiffsynthControlnet",
+                "_meta": { "title": "QwenImageDiffsynthControlnet" }
+            },
+            "70:64": {
+                "inputs": {
+                    "name": "Z-Image-Turbo-Fun-Controlnet-Union.safetensors"
+                },
+                "class_type": "ModelPatchLoader",
+                "_meta": { "title": "ModelPatchLoader" }
+            },
+            "70:69": {
+                "inputs": {
+                    "image": ["72", 0]
+                },
+                "class_type": "GetImageSize",
+                "_meta": { "title": "Get Image Size" }
+            },
+            "70:83": {
+                "inputs": {
+                    "width": params.width,
+                    "height": params.height,
+                    "batch_size": 1
+                },
+                "class_type": "EmptySD3LatentImage",
+                "_meta": { "title": "EmptySD3LatentImage" }
+            },
+            "70:84": {
+                "inputs": {
+                    "samples": ["70:86", 0],
+                    "vae": ["70:40", 0]
+                },
+                "class_type": "VAEDecode",
+                "_meta": { "title": "VAE Decode" }
+            },
+            "70:85": {
+                "inputs": {
+                    "shift": 3,
+                    "model": null // Will be connected with LoRAs
+                },
+                "class_type": "ModelSamplingAuraFlow",
+                "_meta": { "title": "ModelSamplingAuraFlow" }
+            },
+            "70:44": {
+                "inputs": {
+                    "seed": Math.floor(Math.random() * 1000000000000000),
+                    "steps": params.steps,
+                    "cfg": params.cfg || 1,
+                    "sampler_name": params.sampler_name,
+                    "scheduler": params.scheduler,
+                    "denoise": 1,
+                    "model": ["70:47", 0],
+                    "positive": ["70:45", 0],
+                    "negative": ["70:42", 0],
+                    "latent_image": ["70:83", 0]
+                },
+                "class_type": "KSampler",
+                "_meta": { "title": "KSampler" }
+            },
+            "70:86": {
+                "inputs": {
+                    "seed": Math.floor(Math.random() * 1000000000000000),
+                    "steps": params.steps,
+                    "cfg": params.cfg || 1,
+                    "sampler_name": params.sampler_name,
+                    "scheduler": params.scheduler,
+                    "denoise": 0.35,
+                    "model": ["70:85", 0],
+                    "positive": ["70:45", 0],
+                    "negative": ["70:42", 0],
+                    "latent_image": ["70:44", 0]
+                },
+                "class_type": "KSampler",
+                "_meta": { "title": "KSampler" }
+            }
+        };
+
+        // Chain LoRAs if present - connect to both model inputs
+        let nextNodeId = 100;
+        if (params.loras && params.loras.length > 0) {
+            params.loras.forEach(lora => {
+                if (!lora.name) return;
+                const nodeId = nextNodeId.toString();
+                nodes[nodeId] = {
+                    "inputs": {
+                        "lora_name": lora.name,
+                        "strength_model": lora.strength,
+                        "model": currentModelInput
+                    },
+                    "class_type": "LoraLoaderModelOnly",
+                    "_meta": { "title": `LoRA: ${lora.name}` }
+                };
+                currentModelInput = [nodeId, 0];
+                nextNodeId++;
+            });
+        }
+
+        // Connect Final Model Output to both controlnet and upscale sampling
+        nodes["70:60"].inputs.model = currentModelInput;
+        nodes["70:85"].inputs.model = currentModelInput;
+
+        return nodes;
+    }
+
     static getZImageWorkflow(params: ZImageParams) {
         // Base workflow connections
         let currentModelInput = ["46", 0]; // Start with UNET output
@@ -502,7 +714,18 @@ export class ComfyUiService {
     }
 
     static async runZImageWorkflow(params: ZImageParams): Promise<{ imageUrl: string }> {
-        const workflow = this.getZImageWorkflow(params);
+        let workflow: any;
+        let depthImageFilename: string | null = null;
+
+        // If depth image is provided, upload it and use depth workflow
+        if (params.depth_image) {
+            depthImageFilename = await this.uploadImage(params.depth_image);
+            workflow = this.getZImageDepthWorkflow(params, depthImageFilename);
+        } else {
+            // Use standard workflow
+            workflow = this.getZImageWorkflow(params);
+        }
+
         const clientId = 'zimage-' + Math.random().toString(36).substring(7);
 
         return new Promise((resolve, reject) => {

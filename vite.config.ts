@@ -3,36 +3,37 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import { execSync } from 'child_process';
+import { serverConfig } from './server.config';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
     server: {
-      port: 3000,
-      host: '0.0.0.0',
+      port: serverConfig.server.port,
+      host: serverConfig.server.host,
       proxy: {
         '/kling-api': {
-          target: 'https://api.klingai.com/v1',
+          target: serverConfig.proxies.kling.target,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/kling-api/, ''),
-          secure: false, // In case of SSL issues, though usually true is fine
+          secure: serverConfig.proxies.kling.secure,
         },
         '/sd-api': {
-          target: 'http://127.0.0.1:7860',
+          target: serverConfig.proxies.stableDiffusion.target,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/sd-api/, ''),
         },
         '/comfy-api': {
-          target: 'http://127.0.0.1:8188',
+          target: serverConfig.proxies.comfyUI.target,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/comfy-api/, ''),
           ws: true,
           configure: (proxy, _options) => {
             proxy.on('proxyReq', (proxyReq, req, _res) => {
-              proxyReq.setHeader('Origin', 'http://127.0.0.1:8188');
+              proxyReq.setHeader('Origin', serverConfig.proxies.comfyUI.target);
             });
             proxy.on('proxyReqWs', (proxyReq, _req, _socket, _options, _head) => {
-              proxyReq.setHeader('Origin', 'http://127.0.0.1:8188');
+              proxyReq.setHeader('Origin', serverConfig.proxies.comfyUI.target);
             });
           },
         }
@@ -46,10 +47,10 @@ export default defineConfig(({ mode }) => {
           // Middleware to list media folders
           server.middlewares.use('/list-media', (req, res, next) => {
             if (req.method === 'GET') {
-              const mediaDir = path.resolve(process.cwd(), 'media');
+              const mediaDir = path.resolve(process.cwd(), serverConfig.paths.mediaDir);
               const result: any = { sliced_img: [], upscale: [] };
 
-              const types = ['sliced_img', 'upscale', 'individual_upscale', 'turbowan', 'stitched', 'z_image', 'inverse'];
+              const types = serverConfig.paths.mediaTypes;
               types.forEach(type => {
                 const typeDir = path.join(mediaDir, type);
                 if (fs.existsSync(typeDir)) {
@@ -144,16 +145,10 @@ export default defineConfig(({ mode }) => {
               res.end('Forbidden');
               return;
             }
-            const filePath = path.join(process.cwd(), 'media', url);
+            const filePath = path.join(process.cwd(), serverConfig.paths.mediaDir, url);
             if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
               const ext = path.extname(filePath).toLowerCase();
-              const mime: Record<string, string> = {
-                '.png': 'image/png',
-                '.jpg': 'image/jpeg',
-                '.jpeg': 'image/jpeg',
-                '.mp4': 'video/mp4',
-                '.webm': 'video/webm'
-              };
+              const mime = serverConfig.files.mimeTypes;
               res.setHeader('Content-Type', mime[ext] || 'application/octet-stream');
               res.setHeader('Access-Control-Allow-Origin', '*'); // Allow cross-origin for ComfyUI if needed
               fs.createReadStream(filePath).pipe(res);
@@ -177,8 +172,8 @@ export default defineConfig(({ mode }) => {
                     return;
                   }
 
-                  const fullVideoPath = path.join(process.cwd(), 'media', videoPath);
-                  const outputPath = path.join(process.cwd(), 'media', 'temp_last_frame.png');
+                  const fullVideoPath = path.join(process.cwd(), serverConfig.paths.mediaDir, videoPath);
+                  const outputPath = path.join(process.cwd(), serverConfig.paths.mediaDir, 'temp_last_frame.png');
 
                   const { exec } = await import('child_process');
                   const { promisify } = await import('util');
@@ -225,12 +220,12 @@ export default defineConfig(({ mode }) => {
                   }
 
                   const timestamp = Date.now();
-                  const listFilePath = path.join(process.cwd(), 'media', `list_${timestamp}.txt`);
-                  const content = videos.map(v => `file '${path.join(process.cwd(), 'media', v).replace(/\\/g, '/')}'`).join('\n');
+                  const listFilePath = path.join(process.cwd(), serverConfig.paths.mediaDir, `list_${timestamp}.txt`);
+                  const content = videos.map(v => `file '${path.join(process.cwd(), serverConfig.paths.mediaDir, v).replace(/\\/g, '/')}'`).join('\n');
                   fs.writeFileSync(listFilePath, content);
 
                   const safeOutputName = (outputName || `stitched_${timestamp}.mp4`).replace(/[^a-zA-Z0-9_\-\.]/g, '_');
-                  const outputDir = path.join(process.cwd(), 'media', 'stitched');
+                  const outputDir = path.join(process.cwd(), serverConfig.paths.mediaDir, 'stitched');
                   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
                   const finalOutputPath = path.join(outputDir, safeOutputName);
 
@@ -272,10 +267,10 @@ export default defineConfig(({ mode }) => {
                     return;
                   }
 
-                  const fullVideoPath = path.join(process.cwd(), 'media', videoPath);
+                  const fullVideoPath = path.join(process.cwd(), serverConfig.paths.mediaDir, videoPath);
                   const timestamp = Date.now();
                   const filename = `reversed_${timestamp}.mp4`;
-                  const outputDir = path.join(process.cwd(), 'media', 'inverse');
+                  const outputDir = path.join(process.cwd(), serverConfig.paths.mediaDir, 'inverse');
                   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
                   const outputPath = path.join(outputDir, filename);
 
@@ -317,7 +312,7 @@ export default defineConfig(({ mode }) => {
                   }
 
                   const safeFolder = folder ? folder.replace(/[^a-zA-Z0-9_\-\.]/g, '_') : 'turbowan';
-                  const dir = path.resolve(process.cwd(), 'media', safeFolder);
+                  const dir = path.resolve(process.cwd(), serverConfig.paths.mediaDir, safeFolder);
                   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
                   const safeFilename = filename ? filename.replace(/[^a-zA-Z0-9_\-\.]/g, '_') : `video_${Date.now()}.mp4`;
@@ -327,10 +322,10 @@ export default defineConfig(({ mode }) => {
                   // We must use absolute URLs in Node context
                   let targetUrl = url;
                   if (url.startsWith('/comfy-api')) {
-                    targetUrl = url.replace('/comfy-api', 'http://127.0.0.1:8188');
+                    targetUrl = url.replace('/comfy-api', serverConfig.proxies.comfyUI.target);
                   } else if (url.startsWith('/')) {
                     // Fallback to local server if it's another relative path
-                    targetUrl = `http://127.0.0.1:3000${url}`;
+                    targetUrl = `http://${serverConfig.server.host}:${serverConfig.server.port}${url}`;
                   }
 
                   const response = await fetch(targetUrl);
@@ -367,23 +362,23 @@ export default defineConfig(({ mode }) => {
                   }
 
                   const safeName = name.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
-                  const validTypes = ['sliced_img', 'upscale', 'individual_upscale', 'turbowan', 'stitched', 'z_image', 'inverse'];
+                  const validTypes = serverConfig.paths.mediaTypes;
                   const safeType = validTypes.includes(type) ? type : 'upscale';
 
                   let targetPath;
                   if (file) {
                     const safeFile = file.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
                     if (name === 'Miscellaneous') {
-                      targetPath = path.resolve(process.cwd(), 'media', safeType, safeFile);
+                      targetPath = path.resolve(process.cwd(), serverConfig.paths.mediaDir, safeType, safeFile);
                     } else {
-                      targetPath = path.resolve(process.cwd(), 'media', safeType, safeName, safeFile);
+                      targetPath = path.resolve(process.cwd(), serverConfig.paths.mediaDir, safeType, safeName, safeFile);
                     }
                   } else {
-                    targetPath = path.resolve(process.cwd(), 'media', safeType, safeName);
+                    targetPath = path.resolve(process.cwd(), serverConfig.paths.mediaDir, safeType, safeName);
                   }
 
                   // Safety check
-                  if (!targetPath.startsWith(path.join(process.cwd(), 'media'))) {
+                  if (!targetPath.startsWith(path.join(process.cwd(), serverConfig.paths.mediaDir))) {
                     res.statusCode = 403;
                     res.end('Invalid path');
                     return;
@@ -414,7 +409,7 @@ export default defineConfig(({ mode }) => {
 
           server.middlewares.use('/list-loras', (req, res, next) => {
             if (req.method === 'GET') {
-              const loraDir = 'D:\\comfui-Python3.12\\ComfyUI\\models\\loras';
+              const loraDir = serverConfig.paths.loraDir;
               try {
                 if (!fs.existsSync(loraDir)) {
                   console.warn(`LoRA directory not found: ${loraDir}`);
@@ -424,7 +419,7 @@ export default defineConfig(({ mode }) => {
                 }
 
                 const files = fs.readdirSync(loraDir);
-                const loras = files.filter(f => f.endsWith('.safetensors'));
+                const loras = files.filter(f => f.endsWith(serverConfig.files.loraExtension));
                 res.statusCode = 200;
                 res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify(loras));
@@ -455,7 +450,7 @@ export default defineConfig(({ mode }) => {
                   // Security: Ensure targetDir doesn't contain traversing characters like ..
                   const safeTargetDir = (targetDir || 'sliced_img').replace(/(\.\.(\/|\\|$))+/g, '');
 
-                  const dir = path.resolve(process.cwd(), 'media', safeTargetDir, safeFolder);
+                  const dir = path.resolve(process.cwd(), serverConfig.paths.mediaDir, safeTargetDir, safeFolder);
 
                   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
                   const base64Data = image.replace(/^data:\w+\/[\w\-]+;base64,/, "");
