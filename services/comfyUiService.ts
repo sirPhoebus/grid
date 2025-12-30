@@ -295,7 +295,7 @@ export class ComfyUiService {
             },
             "7": {
                 "inputs": {
-                    "num_frames": 97,
+                    "num_frames": 137,
                     "num_steps": 4,
                     "resolution": "480",
                     "aspect_ratio": aspectRatio,

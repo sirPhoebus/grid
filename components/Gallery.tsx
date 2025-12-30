@@ -29,7 +29,7 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
     const [loading, setLoading] = useState(true);
     const [selectedMedia, setSelectedMedia] = useState<string | null>(null);
     const [isMediaVideo, setIsMediaVideo] = useState(false);
-    const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+    const [selectedFiles, setSelectedFiles] = useState<Map<string, string>>(new Map()); // Map<fileUrl, folderName>
     const [isSelectionMode, setIsSelectionMode] = useState(false);
 
     useEffect(() => {
@@ -54,17 +54,49 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
             });
     }, []);
 
-    // ESC key handler to close modal - MUST be before early return
+    const activeData = data[activeTab];
+
+    const navigateToImage = (direction: 'next' | 'prev') => {
+        // Get all files from current view
+        const allFiles: { url: string; isVideo: boolean }[] = [];
+        activeData.forEach(folder => {
+            folder.files.forEach(file => {
+                const isVideo = file.url.endsWith('.mp4') || file.url.endsWith('.webm');
+                allFiles.push({ url: file.url, isVideo });
+            });
+        });
+
+        const currentIndex = allFiles.findIndex(f => f.url === selectedMedia);
+        if (currentIndex === -1) return;
+
+        let newIndex;
+        if (direction === 'prev') {
+            newIndex = currentIndex > 0 ? currentIndex - 1 : allFiles.length - 1;
+        } else {
+            newIndex = currentIndex < allFiles.length - 1 ? currentIndex + 1 : 0;
+        }
+
+        setSelectedMedia(allFiles[newIndex].url);
+        setIsMediaVideo(allFiles[newIndex].isVideo);
+    };
+
+    // ESC and Arrow key handlers for navigation
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape' && selectedMedia) {
                 setSelectedMedia(null);
             }
+
+            // Arrow key navigation in preview mode
+            if (selectedMedia && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+                e.preventDefault();
+                navigateToImage(e.key === 'ArrowLeft' ? 'prev' : 'next');
+            }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedMedia]);
+    }, [selectedMedia, activeData]);
 
     if (loading) {
         return (
@@ -73,8 +105,6 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
             </div>
         );
     }
-
-    const activeData = data[activeTab];
 
     const handleDelete = async (folderName: string) => {
         if (!confirm(`Are you sure you want to delete "${folderName}"? This cannot be undone.`)) return;
@@ -138,10 +168,8 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
 
         try {
             // Delete all selected files
-            const deletePromises = Array.from(selectedFiles).map(fileUrl => {
-                const parts = (fileUrl as string).split('/');
-                const fileName = parts.pop()!;
-                const folderName = parts.pop()!;
+            const deletePromises = Array.from(selectedFiles.entries()).map(([fileUrl, folderName]) => {
+                const fileName = fileUrl.split('/').pop()!;
 
                 return fetch('/delete-media', {
                     method: 'POST',
@@ -161,7 +189,7 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
             const res = await fetch('/list-media');
             const newData = await res.json();
             setData(newData);
-            setSelectedFiles(new Set());
+            setSelectedFiles(new Map());
             setIsSelectionMode(false);
             setLoading(false);
         } catch (e) {
@@ -170,26 +198,26 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
         }
     };
 
-    const toggleFileSelection = (fileUrl: string) => {
-        const newSelection = new Set(selectedFiles);
+    const toggleFileSelection = (fileUrl: string, folderName: string) => {
+        const newSelection = new Map(selectedFiles);
         if (newSelection.has(fileUrl)) {
             newSelection.delete(fileUrl);
         } else {
-            newSelection.add(fileUrl);
+            newSelection.set(fileUrl, folderName);
         }
         setSelectedFiles(newSelection);
     };
 
     const selectAll = () => {
-        const allFiles = new Set<string>();
+        const allFiles = new Map<string, string>();
         activeData.forEach(folder => {
-            folder.files.forEach(file => allFiles.add(file.url));
+            folder.files.forEach(file => allFiles.set(file.url, folder.name));
         });
         setSelectedFiles(allFiles);
     };
 
     const clearSelection = () => {
-        setSelectedFiles(new Set());
+        setSelectedFiles(new Map());
         setIsSelectionMode(false);
     };
 
@@ -371,7 +399,7 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                                                 }`}
                                             onClick={() => {
                                                 if (isSelectionMode) {
-                                                    toggleFileSelection(file);
+                                                    toggleFileSelection(file, folder.name);
                                                 } else {
                                                     setSelectedMedia(file);
                                                     setIsMediaVideo(isVideo);
@@ -421,7 +449,7 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                                                     </div>
                                                 )}
 
-                                                {fileObj.time && !isSelectionMode && (
+                                                {fileObj.time && !isSelectionMode && activeTab !== 'z_image' && (
                                                     <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 rounded text-[10px] font-bold text-white shadow-lg backdrop-blur-sm border border-white/10">
                                                         {new Date(fileObj.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                                                     </div>
@@ -484,9 +512,30 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                     </button>
 
                     <div
-                        className="max-w-7xl max-h-[90vh] w-full flex flex-col md:flex-row items-center justify-center gap-6 animate-in zoom-in-95 duration-300"
+                        className="max-w-7xl max-h-[90vh] w-full flex flex-col md:flex-row items-center justify-center gap-6 animate-in zoom-in-95 duration-300 relative group"
                         onClick={(e) => e.stopPropagation()}
                     >
+                        {/* Navigation Arrows */}
+                        <button
+                            onClick={() => navigateToImage('prev')}
+                            className="absolute left-4 top-1/2 -translate-y-1/2 z-10 p-4 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all border border-white/10 opacity-0 group-hover:opacity-100 hidden md:block"
+                            title="Previous (Left Arrow)"
+                        >
+                            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </button>
+
+                        <button
+                            onClick={() => navigateToImage('next')}
+                            className="absolute right-4 md:right-[220px] top-1/2 -translate-y-1/2 z-10 p-4 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all border border-white/10 opacity-0 group-hover:opacity-100 hidden md:block"
+                            title="Next (Right Arrow)"
+                        >
+                            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                            </svg>
+                        </button>
+
                         {isMediaVideo ? (
                             <video
                                 src={selectedMedia}
