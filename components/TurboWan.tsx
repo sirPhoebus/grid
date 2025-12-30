@@ -13,9 +13,10 @@ interface VideoSegment {
 interface TurboWanProps {
     initialData?: { imageUrl: string, prompt: string } | null;
     onClearInitialData?: () => void;
+    onPreviewMedia?: (url: string) => void;
 }
 
-export const TurboWan: React.FC<TurboWanProps> = ({ initialData, onClearInitialData }) => {
+export const TurboWan: React.FC<TurboWanProps> = ({ initialData, onClearInitialData, onPreviewMedia }) => {
     const [segments, setSegments] = useState<VideoSegment[]>([]);
     const [currentImage, setCurrentImage] = useState<string | null>(null);
     const [aspectRatio, setAspectRatio] = useState<string>("16:9");
@@ -472,7 +473,10 @@ export const TurboWan: React.FC<TurboWanProps> = ({ initialData, onClearInitialD
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                         {segments.map((seg, i) => (
                                             <div key={i} className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-hidden hover:border-indigo-500/30 transition-colors group">
-                                                <div className={`relative ${getAspectClass(aspectRatio)}`}>
+                                                <div
+                                                    className={`relative ${getAspectClass(aspectRatio)} cursor-zoom-in`}
+                                                    onClick={() => onPreviewMedia?.(seg.videoUrl)}
+                                                >
                                                     <video
                                                         src={seg.videoUrl}
                                                         className="w-full h-full object-cover"
@@ -481,12 +485,8 @@ export const TurboWan: React.FC<TurboWanProps> = ({ initialData, onClearInitialD
                                                         muted
                                                         playsInline
                                                     />
-                                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <div className="p-2 bg-indigo-500 rounded-full text-white">
-                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                                                            </svg>
-                                                        </div>
+                                                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <span className="text-[10px] font-black text-white uppercase tracking-widest bg-black/40 px-3 py-1.5 rounded-full border border-white/10 backdrop-blur-sm">Click to Preview</span>
                                                     </div>
                                                     <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 rounded text-[8px] font-black text-white uppercase tracking-tighter">Gen {i + 1}</div>
                                                 </div>
@@ -519,10 +519,14 @@ export const TurboWan: React.FC<TurboWanProps> = ({ initialData, onClearInitialD
                             </div>
 
                             <div
-                                className={`bg-black rounded-3xl overflow-hidden shadow-2xl border border-slate-800 ring-1 ring-white/10 ${getAspectClass(aspectRatio)} mx-auto`}
+                                className={`bg-black rounded-3xl overflow-hidden shadow-2xl border border-slate-800 ring-1 ring-white/10 ${getAspectClass(aspectRatio)} mx-auto cursor-zoom-in group relative`}
                                 style={getContainerStyles(aspectRatio)}
+                                onClick={() => onPreviewMedia?.(stitchedVideoUrl)}
                             >
-                                <video src={stitchedVideoUrl} className="w-full h-full object-cover" controls autoPlay loop />
+                                <video src={stitchedVideoUrl} className="w-full h-full object-cover" autoPlay loop muted={false} />
+                                <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <span className="text-xs font-black text-white uppercase tracking-widest bg-black/40 px-4 py-2 rounded-full border border-white/10 backdrop-blur-sm">Expand Video</span>
+                                </div>
                             </div>
 
                             <div className="flex gap-4">

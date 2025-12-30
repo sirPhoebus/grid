@@ -139,29 +139,51 @@ const Header: React.FC<{
   </header>
 );
 
-const ImageOverlay: React.FC<{ url: string; onClose: () => void }> = ({ url, onClose }) => (
-  <div
-    className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 cursor-zoom-out"
-    onClick={onClose}
-  >
-    <div className="relative max-w-full max-h-full">
-      <img
-        src={url}
-        className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl border border-slate-800"
-        alt="Preview"
-      />
-      <button
-        className="absolute -top-12 right-0 text-slate-400 hover:text-white flex items-center gap-2 transition-colors font-medium"
-        onClick={onClose}
-      >
-        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-        Close Preview
-      </button>
+interface OverlayMedia {
+  url: string;
+  type: 'image' | 'video';
+}
+
+const MediaOverlay: React.FC<{ media: OverlayMedia; onClose: () => void }> = ({ media, onClose }) => {
+  const isVideo = media.type === 'video';
+  const url = media.url;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 cursor-zoom-out"
+      onClick={onClose}
+    >
+      <div className="relative max-w-full max-h-full" onClick={e => e.stopPropagation()}>
+        {isVideo ? (
+          <video
+            src={url}
+            className="max-w-full max-h-[90vh] rounded-xl shadow-2xl border border-slate-800"
+            controls
+            autoPlay
+            loop
+            muted
+            playsInline
+          />
+        ) : (
+          <img
+            src={url}
+            className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl border border-slate-800"
+            alt="Preview"
+          />
+        )}
+        <button
+          className="absolute -top-12 right-0 text-slate-400 hover:text-white flex items-center gap-2 transition-colors font-medium cursor-pointer"
+          onClick={onClose}
+        >
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          Close Preview
+        </button>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor' | 'reverse' | 'help'>('z-image');
@@ -182,7 +204,7 @@ const App: React.FC = () => {
     error: null,
     prompt: ""
   });
-  const [overlayUrl, setOverlayUrl] = useState<string | null>(null);
+  const [overlayMedia, setOverlayMedia] = useState<OverlayMedia | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [config, setConfig] = useState<AppConfig>({
     provider: 'gemini',
@@ -757,7 +779,7 @@ const App: React.FC = () => {
         config={config}
         onSave={handleSaveConfig}
       />
-      {overlayUrl && <ImageOverlay url={overlayUrl} onClose={() => setOverlayUrl(null)} />}
+      {overlayMedia && <MediaOverlay media={overlayMedia} onClose={() => setOverlayMedia(null)} />}
 
       <main className="max-w-6xl mx-auto mt-12 px-6">
         {currentView === 'gallery' ? (
@@ -827,11 +849,13 @@ const App: React.FC = () => {
                     {individualState.upscaledPreview ? (
                       <div className="space-y-4">
                         <div
-                          className="bg-slate-900 rounded-2xl overflow-hidden border border-indigo-500/30 cursor-zoom-in relative group"
-                          onClick={() => setOverlayUrl(individualState.upscaledPreview)}
+                          className="bg-slate-900 rounded-2xl overflow-hidden border border-indigo-500/30 relative group"
                         >
                           <img src={individualState.upscaledPreview} className="w-full h-auto" alt="Upscaled" />
-                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <div
+                            className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-zoom-in"
+                            onClick={() => setOverlayMedia({ url: individualState.upscaledPreview!, type: 'image' })}
+                          >
                             <span className="text-white font-medium">Click to Preview</span>
                           </div>
                         </div>
@@ -867,6 +891,7 @@ const App: React.FC = () => {
           <TurboWan
             initialData={turboHandover}
             onClearInitialData={() => setTurboHandover(null)}
+            onPreviewMedia={(url) => setOverlayMedia({ url, type: 'video' })}
           />
         ) : currentView === 'stitcher' ? (
           <VideoStitcher onNavigateToGallery={() => setCurrentView('gallery')} />
@@ -889,7 +914,7 @@ const App: React.FC = () => {
               });
               setCurrentView('upscale');
             }}
-            onPreviewImage={setOverlayUrl}
+            onPreviewImage={(url) => setOverlayMedia({ url, type: 'image' })}
           />
         ) : currentView === 'extractor' ? (
           <FrameExtractor
@@ -1053,7 +1078,7 @@ const App: React.FC = () => {
                         return (
                           <div
                             key={frame.id}
-                            onClick={() => isClickable && setOverlayUrl(frame.upscaledUrl || frame.originalBase64)}
+                            onClick={() => isClickable && setOverlayMedia({ url: frame.upscaledUrl || frame.originalBase64, type: 'image' })}
                             className={`aspect-square bg-slate-800 rounded-lg overflow-hidden border transition-all ${frame.status === 'error' ? 'border-red-500/50 shadow-lg shadow-red-500/10' : 'border-slate-700'} relative group ${isClickable ? 'cursor-zoom-in hover:border-indigo-500 hover:scale-105 z-10' : ''}`}
                           >
                             <img
@@ -1209,6 +1234,7 @@ const App: React.FC = () => {
           </>
         )}
       </main>
+      {overlayMedia && <MediaOverlay media={overlayMedia} onClose={() => setOverlayMedia(null)} />}
     </div>
   );
 };
