@@ -468,27 +468,63 @@ export default defineConfig(({ mode }) => {
 
           server.middlewares.use('/save-slice', (req, res, next) => {
             if (req.method === 'POST') {
-              // console.log("Received /save-slice request");
               const chunks: Uint8Array[] = [];
               req.on('data', chunk => chunks.push(chunk));
-              req.on('end', () => {
+              req.on('end', async () => {
                 try {
                   const body = JSON.parse(Buffer.concat(chunks).toString());
                   const { image, filename, folder, targetDir } = body;
 
                   // Use provided folder or default
                   const safeFolder = folder ? folder.replace(/[^a-zA-Z0-9_\-\.]/g, '_') : 'default';
-
-                  // Default to sliced_img if no targetDir, or use provided targetDir (relative to media/)
-                  // Security: Ensure targetDir doesn't contain traversing characters like ..
                   const safeTargetDir = (targetDir || 'sliced_img').replace(/(\.\.(\/|\\|$))+/g, '');
-
                   const dir = path.resolve(process.cwd(), serverConfig.paths.mediaDir, safeTargetDir, safeFolder);
 
                   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-                  const base64Data = image.replace(/^data:\w+\/[\w\-]+;base64,/, "");
-                  fs.writeFileSync(path.join(dir, filename), base64Data, 'base64');
-                  // console.log(`Saved ${safeTargetDir}/${safeFolder}/${filename}`);
+                  const targetPath = path.join(dir, filename);
+
+                  if (image.startsWith('http') || image.startsWith('/') || image.startsWith('blob:')) {
+                    // It's a URL, fetch it
+                    let fetchUrl = image;
+                    if (image.startsWith('/comfy-api')) {
+                      fetchUrl = image.replace('/comfy-api', serverConfig.proxies.comfyUI.target);
+                    } else if (image.startsWith('/')) {
+                      const host = req.headers.host || `127.0.0.1:${serverConfig.server.port}`;
+                      fetchUrl = `http://${host}${image}`;
+                    }
+
+                    try {
+                      console.log(`[SAVE] Fetching from: ${fetchUrl}`);
+                      const urlObj = new URL(fetchUrl);
+                      const response = await fetch(urlObj.toString(), { method: 'GET' });
+                      if (!response.ok) {
+                        console.error(`[SAVE] Fetch failed with status ${response.status}: ${response.statusText}`);
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                      }
+                      const arrayBuffer = await response.arrayBuffer();
+                      fs.writeFileSync(targetPath, Buffer.from(arrayBuffer));
+                    } catch (e) {
+                      console.error(`[SAVE] Error fetching image: ${e}`);
+                      // Fallback: if it's a local media URL, try direct file copy
+                      if (image.startsWith('/media/')) {
+                        const localPath = path.join(process.cwd(), serverConfig.paths.mediaDir, image.replace('/media/', ''));
+                        console.log(`[SAVE] Attempting fallback copy from: ${localPath}`);
+                        if (fs.existsSync(localPath)) {
+                          fs.copyFileSync(localPath, targetPath);
+                        } else {
+                          throw e;
+                        }
+                      } else {
+                        throw e;
+                      }
+                    }
+                  } else {
+                    // It's a base64 string
+                    const base64Data = image.replace(/^data:\w+\/[\w\-]+;base64,/, "");
+                    fs.writeFileSync(targetPath, base64Data, 'base64');
+                  }
+                  console.log(`[SAVE] Successfully saved to ${targetPath}`);
+
                   res.statusCode = 200;
                   res.end('saved');
                 } catch (e) {

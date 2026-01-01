@@ -199,8 +199,9 @@ const MediaOverlay: React.FC<{ media: OverlayMedia; onClose: () => void }> = ({ 
 };
 
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor' | 'reverse' | 'help'>('z-image');
+  const [currentView, setCurrentView] = useState<'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit'>('z-image');
   const [turboHandover, setTurboHandover] = useState<{ imageUrl: string, prompt: string } | null>(null);
+  const [qwenHandover, setQwenHandover] = useState<{ imageUrl: string, prompt: string } | null>(null);
   const [hasKey, setHasKey] = useState<boolean>(false);
   const [individualState, setIndividualState] = useState<{
     file: File | null;
@@ -276,7 +277,18 @@ const App: React.FC = () => {
 
   const handleSaveConfig = (newConfig: AppConfig) => {
     setConfig(newConfig);
-    localStorage.setItem('alcove_config', JSON.stringify(newConfig));
+    try {
+      localStorage.setItem('alcove_config', JSON.stringify(newConfig));
+    } catch (e) {
+      console.warn("Failed to save config to localStorage", e);
+    }
+  };
+
+  const clearAppStorage = () => {
+    if (confirm("This will clear all saved settings and generated previews. Continue?")) {
+      localStorage.clear();
+      window.location.reload();
+    }
   };
 
   const handleSelectKey = async () => {
@@ -791,6 +803,7 @@ const App: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)}
         config={config}
         onSave={handleSaveConfig}
+        onClearStorage={clearAppStorage}
       />
       {overlayMedia && <MediaOverlay media={overlayMedia} onClose={() => setOverlayMedia(null)} />}
 
@@ -922,6 +935,10 @@ const App: React.FC = () => {
               setTurboHandover(data);
               setCurrentView('turbo-wan');
             }}
+            onSendToQwen={(data) => {
+              setQwenHandover(data);
+              setCurrentView('qwen-edit');
+            }}
             onSendToUpscale={(imageUrl, prompt) => {
               setIndividualState({
                 file: null,
@@ -957,6 +974,8 @@ const App: React.FC = () => {
           <Help />
         ) : currentView === 'qwen-edit' ? (
           <QwenPage
+            initialData={qwenHandover}
+            onClearInitialData={() => setQwenHandover(null)}
             onPreviewImage={(url) => setOverlayMedia({ url, type: 'image' })}
             onSendToTurbo={(data) => {
               setTurboHandover(data);
@@ -991,6 +1010,10 @@ const App: React.FC = () => {
                 prompt: prompt || ""
               });
               setCurrentView('upscale');
+            }}
+            onSendToQwen={(data) => {
+              setQwenHandover(data);
+              setCurrentView('qwen-edit');
             }}
           />
         ) : (

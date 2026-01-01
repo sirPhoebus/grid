@@ -20,9 +20,10 @@ interface MediaData {
 interface GalleryProps {
     onSendToTurbo?: (data: { imageUrl: string, prompt: string }) => void;
     onSendToUpscale?: (imageUrl: string, prompt: string) => void;
+    onSendToQwen?: (data: { imageUrl: string, prompt: string }) => void;
 }
 
-export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale }) => {
+export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale, onSendToQwen }) => {
     const [data, setData] = useState<MediaData>({
         sliced_img: [], upscale: [], individual_upscale: [], turbowan: [], stitched: [], z_image: [], inverse: [], qwen_gallery: []
     });
@@ -460,12 +461,6 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                                                     </div>
                                                 )}
 
-                                                {fileObj.time && !isSelectionMode && activeTab !== 'z_image' && (
-                                                    <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 rounded text-[10px] font-bold text-white shadow-lg backdrop-blur-sm border border-white/10">
-                                                        {new Date(fileObj.time).toLocaleTimeString([], { minute: '2-digit', second: '2-digit', hour12: false })}
-                                                    </div>
-                                                )}
-
                                                 {!isSelectionMode && (
                                                     <div className="absolute bottom-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <button
@@ -515,6 +510,21 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                                                             </svg>
                                                         </button>
+
+                                                        {!isVideo && (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    onSendToQwen?.({ imageUrl: file, prompt: "From Gallery" });
+                                                                }}
+                                                                className="bg-cyan-600/20 p-2 rounded-lg text-cyan-400 hover:bg-cyan-600 hover:text-white transition-all backdrop-blur-md border border-cyan-500/30"
+                                                                title="Edit with Qwen"
+                                                            >
+                                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                                </svg>
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
@@ -605,11 +615,26 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                                 }}
                                 className="flex items-center gap-3 px-6 py-4 bg-purple-600/10 hover:bg-purple-600 text-purple-400 hover:text-white rounded-xl font-bold text-sm backdrop-blur-md border border-purple-600/50 transition-all shadow-xl active:scale-95 w-full justify-center group"
                             >
-                                <svg className="w-5 h-5 group-hover:animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg className="w-5 h-5 group-hover:animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                                 </svg>
-                                Video
+                                Generate Video
                             </button>
+
+                            {!isMediaVideo && (
+                                <button
+                                    onClick={() => {
+                                        onSendToQwen?.({ imageUrl: selectedMedia!, prompt: "From Gallery" });
+                                        setSelectedMedia(null);
+                                    }}
+                                    className="flex items-center gap-3 px-6 py-4 bg-cyan-600/10 hover:bg-cyan-600 text-cyan-400 hover:text-white rounded-xl font-bold text-sm backdrop-blur-md border border-cyan-600/50 transition-all shadow-xl active:scale-95 w-full justify-center group"
+                                >
+                                    <svg className="w-5 h-5 group-hover:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                    </svg>
+                                    Edit with Qwen
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

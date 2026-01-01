@@ -13,7 +13,7 @@ export class GeminiService {
 
   private static async toBase64(imageInput: string): Promise<string> {
     if (!imageInput) return "";
-    if (imageInput.startsWith('blob:')) {
+    if (imageInput.startsWith('blob:') || imageInput.startsWith('/') || imageInput.startsWith('http')) {
       const response = await fetch(imageInput);
       const blob = await response.blob();
       return new Promise((resolve) => {

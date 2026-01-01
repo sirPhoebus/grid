@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { ComfyUiService } from '../services/comfyUiService';
+import { PromptLibrary, addPromptToLibrary } from './PromptLibrary';
 
 const PhotoIcon = ({ className }: { className?: string }) => (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -38,23 +39,57 @@ const XMarkIcon = ({ className }: { className?: string }) => (
 );
 
 interface QwenPageProps {
+    initialData?: { imageUrl: string, prompt: string } | null;
+    onClearInitialData?: () => void;
     onPreviewImage?: (url: string) => void;
     onSendToTurbo?: (data: { imageUrl: string, prompt: string }) => void;
     onSendToUpscale?: (imageUrl: string, prompt: string) => void;
 }
 
-export const QwenPage: React.FC<QwenPageProps> = ({ onPreviewImage, onSendToTurbo, onSendToUpscale }) => {
+export const QwenPage: React.FC<QwenPageProps> = ({ initialData, onClearInitialData, onPreviewImage, onSendToTurbo, onSendToUpscale }) => {
     const [mode, setMode] = useState<'single' | 'double' | 'triple'>('single');
     const [images, setImages] = useState<(string | null)[]>([null, null, null]);
     const [doubleImages, setDoubleImages] = useState<(string | null)[]>([null, null]);
     const [singleImage, setSingleImage] = useState<string | null>(null);
     const [prompt, setPrompt] = useState('replace silhouette in image2 with the girl from image1');
+
+    React.useEffect(() => {
+        if (initialData) {
+            setSingleImage(initialData.imageUrl);
+            setPrompt(initialData.prompt);
+            setMode('single');
+            onClearInitialData?.();
+        }
+    }, [initialData, onClearInitialData]);
     const [isGenerating, setIsGenerating] = useState(false);
     const [resultUrls, setResultUrls] = useState<{ resultUrl: string, concatUrl?: string } | null>(null);
     const [error, setError] = useState<string | null>(null);
     const fileInputRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
     const doubleFileInputRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
     const singleFileInputRef = useRef<HTMLInputElement>(null);
+
+    const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+    const [globalPrompts, setGlobalPrompts] = useState<string[]>([]);
+
+    React.useEffect(() => {
+        const stored = localStorage.getItem('global_prompt_library');
+        if (stored) {
+            try {
+                setGlobalPrompts(JSON.parse(stored));
+            } catch (e) {
+                console.error("Failed to parse saved prompts", e);
+            }
+        }
+    }, [isLibraryOpen]);
+
+    const savePrompt = (text: string) => {
+        if (!text) return;
+        addPromptToLibrary(text);
+
+        // Refresh local list
+        const stored = localStorage.getItem('global_prompt_library');
+        if (stored) setGlobalPrompts(JSON.parse(stored));
+    };
 
     const handleImageUpload = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -128,28 +163,20 @@ export const QwenPage: React.FC<QwenPageProps> = ({ onPreviewImage, onSendToTurb
 
     const handleSaveToGallery = async (imageUrl: string, prefix: string, showAlert = true) => {
         try {
-            const blobResponse = await fetch(imageUrl);
-            const blob = await blobResponse.blob();
-
-            const reader = new FileReader();
-            reader.readAsDataURL(blob);
-            reader.onloadend = async () => {
-                const base64data = reader.result as string;
-                const filename = `${prefix}_${Date.now()}.png`;
-                const response = await fetch('/save-slice', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        image: base64data,
-                        filename: filename,
-                        folder: 'Miscellaneous',
-                        targetDir: 'qwen_gallery'
-                    })
-                });
-                if (response.ok && showAlert) {
-                    alert('Saved to gallery!');
-                }
-            };
+            const filename = `${prefix}_${Date.now()}.png`;
+            const response = await fetch('/save-slice', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    image: imageUrl,
+                    filename: filename,
+                    folder: 'Miscellaneous',
+                    targetDir: 'qwen_gallery'
+                })
+            });
+            if (response.ok && showAlert) {
+                alert('Saved to gallery!');
+            }
         } catch (err) {
             console.error('Failed to save to gallery', err);
             if (showAlert) alert('Error processing image for gallery.');
@@ -273,9 +300,25 @@ export const QwenPage: React.FC<QwenPageProps> = ({ onPreviewImage, onSendToTurb
                         </section>
 
                         <section className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-xl">
-                            <h2 className="text-xl font-semibold flex items-center gap-2">
-                                <SparklesIcon className="w-5 h-5 text-blue-400" /> Creative Prompt
-                            </h2>
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-xl font-semibold flex items-center gap-2">
+                                    <SparklesIcon className="w-5 h-5 text-blue-400" /> Creative Prompt
+                                </h2>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setIsLibraryOpen(true)}
+                                        className="p-1 px-3 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg text-[10px] font-bold uppercase tracking-widest border border-slate-700 transition-all"
+                                    >
+                                        Library
+                                    </button>
+                                    <button
+                                        onClick={() => savePrompt(prompt)}
+                                        className="p-1 px-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-lg text-[10px] font-bold uppercase tracking-widest border border-indigo-500/20 transition-all"
+                                    >
+                                        Save
+                                    </button>
+                                </div>
+                            </div>
                             <textarea
                                 value={prompt}
                                 onChange={(e) => setPrompt(e.target.value)}
@@ -319,6 +362,14 @@ export const QwenPage: React.FC<QwenPageProps> = ({ onPreviewImage, onSendToTurb
                                             Result Artifact
                                         </span>
                                         <div className="flex gap-2">
+                                            {mode === 'single' && (
+                                                <button
+                                                    onClick={() => setSingleImage(resultUrls.resultUrl)}
+                                                    className="px-4 py-2 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-400 hover:text-white rounded-full text-xs font-bold transition-all border border-emerald-600/50 flex items-center gap-2 shadow-lg"
+                                                >
+                                                    Use as Source
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={() => onSendToUpscale?.(resultUrls.resultUrl, prompt)}
                                                 className="px-4 py-2 bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-full text-xs font-bold transition-all border border-indigo-600/50 flex items-center gap-2 shadow-lg"
@@ -396,6 +447,14 @@ export const QwenPage: React.FC<QwenPageProps> = ({ onPreviewImage, onSendToTurb
                     </div>
                 </div>
             </div>
+            <PromptLibrary
+                isOpen={isLibraryOpen}
+                onClose={() => setIsLibraryOpen(false)}
+                onSelectPrompt={(p) => {
+                    setPrompt(p);
+                    setIsLibraryOpen(false);
+                }}
+            />
         </div>
     );
 };

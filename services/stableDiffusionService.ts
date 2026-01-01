@@ -14,7 +14,7 @@ export class StableDiffusionService {
         }
         let cleanBase64: string;
 
-        if (imageInput.startsWith('blob:')) {
+        if (imageInput.startsWith('blob:') || imageInput.startsWith('/') || imageInput.startsWith('http')) {
             const response = await fetch(imageInput);
             const blob = await response.blob();
             cleanBase64 = await new Promise((resolve) => {

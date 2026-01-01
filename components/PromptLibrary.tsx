@@ -22,7 +22,11 @@ export const addPromptToLibrary = (prompt: string, storageKey: string = 'global_
     if (prompts.includes(prompt)) return;
 
     const newPrompts = [prompt, ...prompts];
-    localStorage.setItem(storageKey, JSON.stringify(newPrompts));
+    try {
+        localStorage.setItem(storageKey, JSON.stringify(newPrompts));
+    } catch (e) {
+        console.warn("Failed to add prompt to library", e);
+    }
 };
 
 export const PromptLibrary: React.FC<PromptLibraryProps> = ({
@@ -48,7 +52,11 @@ export const PromptLibrary: React.FC<PromptLibraryProps> = ({
 
     const savePrompts = (newPrompts: string[]) => {
         setSavedPrompts(newPrompts);
-        localStorage.setItem(storageKey, JSON.stringify(newPrompts));
+        try {
+            localStorage.setItem(storageKey, JSON.stringify(newPrompts));
+        } catch (e) {
+            console.warn("Failed to save prompts to library", e);
+        }
     };
 
     const deletePrompt = (text: string) => {

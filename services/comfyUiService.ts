@@ -29,7 +29,7 @@ export class ComfyUiService {
             throw new Error("No output image found from ComfyUI");
         }
         const imageInfo = saveImageNodeOutput.images[0];
-        return await this.getImage(imageInfo.filename, imageInfo.subfolder, imageInfo.type);
+        return this.getImage(imageInfo.filename, imageInfo.subfolder, imageInfo.type);
     }
 
     private static async uploadImage(imageInput: string, isQwen: boolean = false): Promise<string> {
@@ -115,9 +115,9 @@ export class ComfyUiService {
         const history = await this.getHistory(prompt_id, true);
         const outputs = history[prompt_id].outputs;
         const resultOutput = outputs['105'];
-        const resultUrl = resultOutput?.images?.[0] ? await this.getImage(resultOutput.images[0].filename, resultOutput.images[0].subfolder, resultOutput.images[0].type, true) : "";
+        const resultUrl = resultOutput?.images?.[0] ? this.getImage(resultOutput.images[0].filename, resultOutput.images[0].subfolder, resultOutput.images[0].type, true) : "";
         const concatOutput = outputs['320'];
-        const concatUrl = concatOutput?.images?.[0] ? await this.getImage(concatOutput.images[0].filename, concatOutput.images[0].subfolder, concatOutput.images[0].type, true) : "";
+        const concatUrl = concatOutput?.images?.[0] ? this.getImage(concatOutput.images[0].filename, concatOutput.images[0].subfolder, concatOutput.images[0].type, true) : "";
         return { resultUrl, concatUrl };
     }
 
@@ -129,9 +129,9 @@ export class ComfyUiService {
         const history = await this.getHistory(prompt_id, true);
         const outputs = history[prompt_id].outputs;
         const resultOutput = outputs['105'];
-        const resultUrl = resultOutput?.images?.[0] ? await this.getImage(resultOutput.images[0].filename, resultOutput.images[0].subfolder, resultOutput.images[0].type, true) : "";
+        const resultUrl = resultOutput?.images?.[0] ? this.getImage(resultOutput.images[0].filename, resultOutput.images[0].subfolder, resultOutput.images[0].type, true) : "";
         const concatOutput = outputs['321'];
-        const concatUrl = concatOutput?.images?.[0] ? await this.getImage(concatOutput.images[0].filename, concatOutput.images[0].subfolder, concatOutput.images[0].type, true) : "";
+        const concatUrl = concatOutput?.images?.[0] ? this.getImage(concatOutput.images[0].filename, concatOutput.images[0].subfolder, concatOutput.images[0].type, true) : "";
         return { resultUrl, concatUrl };
     }
 
@@ -143,7 +143,7 @@ export class ComfyUiService {
         const history = await this.getHistory(prompt_id, true);
         const outputs = history[prompt_id].outputs;
         const resultOutput = outputs['105'];
-        const resultUrl = resultOutput?.images?.[0] ? await this.getImage(resultOutput.images[0].filename, resultOutput.images[0].subfolder, resultOutput.images[0].type, true) : "";
+        const resultUrl = resultOutput?.images?.[0] ? this.getImage(resultOutput.images[0].filename, resultOutput.images[0].subfolder, resultOutput.images[0].type, true) : "";
         return { resultUrl };
     }
 
@@ -182,7 +182,7 @@ export class ComfyUiService {
                 throw new Error("No preview images found (Node 8)");
             }
             const lastImageInfo = previewOutput.images[previewOutput.images.length - 1];
-            lastFrameUrl = await this.getImage(lastImageInfo.filename, lastImageInfo.subfolder, lastImageInfo.type);
+            lastFrameUrl = this.getImage(lastImageInfo.filename, lastImageInfo.subfolder, lastImageInfo.type);
         } else {
             // For Qwen, extract from the saved video via ffmpeg endpoint
             const res = await fetch('/extract-last-frame', {
@@ -346,12 +346,9 @@ export class ComfyUiService {
         };
     }
 
-    private static async getImage(filename: string, subfolder: string, type: string, isQwen: boolean = false): Promise<string> {
+    private static getImage(filename: string, subfolder: string, type: string, isQwen: boolean = false): string {
         const params = new URLSearchParams({ filename, subfolder, type });
-        const response = await fetch(`${this.API_BASE_URL}/view?${params.toString()}`);
-        if (!response.ok) throw new Error("Failed to get image");
-        const blob = await response.blob();
-        return URL.createObjectURL(blob);
+        return `${this.API_BASE_URL}/view?${params.toString()}`;
     }
 
     static getZImageDepthWorkflow(params: ZImageParams, depthImageFilename: string) {
@@ -444,7 +441,7 @@ export class ComfyUiService {
                     const output = message.data.output;
                     if (output && output.images) {
                         const image = output.images[0];
-                        const imageUrl = await this.getImage(image.filename, image.subfolder, image.type);
+                        const imageUrl = this.getImage(image.filename, image.subfolder, image.type);
                         ws.close();
                         resolve({ imageUrl });
                     }

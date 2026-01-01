@@ -5,10 +5,11 @@ import { PromptLibrary, addPromptToLibrary } from './PromptLibrary';
 interface ZImageProps {
     onSendToTurbo?: (data: { imageUrl: string, prompt: string }) => void;
     onSendToUpscale?: (imageUrl: string, prompt: string) => void;
+    onSendToQwen?: (data: { imageUrl: string, prompt: string }) => void;
     onPreviewImage?: (url: string) => void;
 }
 
-export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale, onPreviewImage }) => {
+export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale, onSendToQwen, onPreviewImage }) => {
     const [params, setParams] = useState<ZImageParams>(() => {
         const saved = localStorage.getItem('zimage_params');
         if (saved) {
@@ -32,9 +33,31 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale, 
         };
     });
 
-    // Persist params on change
+    // One-time cleanup of legacy large data
     useEffect(() => {
-        localStorage.setItem('zimage_params', JSON.stringify(params));
+        try {
+            const saved = localStorage.getItem('zimage_params');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed.depth_image) {
+                    delete parsed.depth_image;
+                    localStorage.setItem('zimage_params', JSON.stringify(parsed));
+                }
+            }
+        } catch (e) {
+            console.warn("Storage cleanup failed", e);
+        }
+    }, []);
+
+    // Persist params on change (excluding large image data)
+    useEffect(() => {
+        try {
+            const paramsToSave = { ...params };
+            delete paramsToSave.depth_image;
+            localStorage.setItem('zimage_params', JSON.stringify(paramsToSave));
+        } catch (e) {
+            // Silently ignore storage errors to keep UI functional
+        }
     }, [params]);
 
     const [isGenerating, setIsGenerating] = useState(false);
@@ -44,9 +67,15 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale, 
 
     useEffect(() => {
         if (resultImageUrl) {
-            localStorage.setItem('zimage_result', resultImageUrl);
+            try {
+                localStorage.setItem('zimage_result', resultImageUrl);
+            } catch (e) {
+                // Ignore result saving failures
+            }
         }
     }, [resultImageUrl]);
+
+    console.log(`[STORAGE] Params size: ${JSON.stringify(params).length} chars`);
 
     const [error, setError] = useState<string | null>(null);
     const [isLibraryOpen, setIsLibraryOpen] = useState(false);
@@ -130,27 +159,22 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale, 
             const result = await ComfyUiService.runZImageWorkflow(params);
             setResultImageUrl(result.imageUrl);
 
-            // Save to dedicated folder for gallery
-            const timestamp = Date.now();
-
-            // Convert blob URL to base64
-            const response = await fetch(result.imageUrl);
-            const blob = await response.blob();
-            const reader = new FileReader();
-            reader.readAsDataURL(blob);
-            reader.onloadend = async () => {
-                const base64data = reader.result as string;
+            // Auto-save to gallery
+            try {
+                const timestamp = Date.now();
                 await fetch('/save-slice', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        image: base64data,
+                        image: result.imageUrl,
                         filename: `zimage_${timestamp}.png`,
                         folder: '.',
                         targetDir: 'z_image'
                     })
                 });
-            };
+            } catch (saveErr) {
+                console.error("Failed to auto-save Z-Image", saveErr);
+            }
         } catch (err: any) {
             setError(err.message || 'Generation failed');
             console.error(err);
@@ -527,26 +551,38 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale, 
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
                                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Depth Image (Optional)</label>
-                                    {depthImageUrl && (
+                                    {(depthImageUrl || params.depth_image) && (
                                         <button
                                             onClick={() => {
                                                 setDepthImageUrl(null);
-                                                setParams(prev => ({ ...prev, depth_image: undefined }));
+                                                setParams(prev => {
+                                                    const next = { ...prev };
+                                                    delete next.depth_image;
+                                                    return next;
+                                                });
                                             }}
                                             className="p-1 px-2 bg-red-500/10 text-red-400 rounded-lg text-[9px] font-bold uppercase tracking-widest border border-red-500/20 hover:bg-red-500/20 transition-all"
                                         >
-                                            Clear
+                                            Clear All Depth Data
                                         </button>
                                     )}
                                 </div>
                                 <div className="space-y-4">
-                                    {depthImageUrl ? (
+                                    {(depthImageUrl || params.depth_image) ? (
                                         <div className="space-y-4">
                                             <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 flex items-center gap-3">
-                                                <img src={depthImageUrl} alt="Depth" className="w-16 h-16 object-cover rounded-lg" />
+                                                {depthImageUrl ? (
+                                                    <img src={depthImageUrl} alt="Depth" className="w-16 h-16 object-cover rounded-lg" />
+                                                ) : (
+                                                    <div className="w-16 h-16 bg-slate-800 rounded-lg flex items-center justify-center">
+                                                        <svg className="w-6 h-6 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                        </svg>
+                                                    </div>
+                                                )}
                                                 <div className="flex-1">
-                                                    <p className="text-xs text-green-400 font-bold">Depth Image Loaded</p>
-                                                    <p className="text-[10px] text-slate-500 mt-0.5">Using depth-based controlnet workflow</p>
+                                                    <p className="text-xs text-green-400 font-bold">ControlNet Active</p>
+                                                    <p className="text-[10px] text-slate-500 mt-0.5">Using depth-based guidance workflow</p>
                                                 </div>
                                             </div>
 
@@ -691,6 +727,29 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale, 
                         {/* Action Buttons Below Image */}
                         {resultImageUrl && (
                             <div className="flex flex-wrap items-center justify-center gap-4 animate-in slide-in-from-bottom-2 duration-500">
+                                <button
+                                    onClick={() => {
+                                        setDepthImageUrl(resultImageUrl);
+                                        setParams(prev => ({ ...prev, depth_image: resultImageUrl }));
+                                    }}
+                                    className="flex items-center gap-3 px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-[0.2em] rounded-2xl shadow-xl shadow-emerald-500/20 transition-all active:scale-95 group/ref border border-white/10"
+                                >
+                                    <svg className="w-5 h-5 group-hover:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357-2H15" />
+                                    </svg>
+                                    Use as Reference
+                                </button>
+                                {onSendToQwen && (
+                                    <button
+                                        onClick={() => onSendToQwen({ imageUrl: resultImageUrl, prompt: params.prompt })}
+                                        className="flex items-center gap-3 px-8 py-4 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs uppercase tracking-[0.2em] rounded-2xl shadow-xl shadow-emerald-700/20 transition-all active:scale-95 group/qwen border border-white/10"
+                                    >
+                                        <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                        Edit with Qwen
+                                    </button>
+                                )}
                                 {onSendToTurbo && (
                                     <button
                                         onClick={() => onSendToTurbo({ imageUrl: resultImageUrl, prompt: params.prompt })}
