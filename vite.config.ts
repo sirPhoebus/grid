@@ -120,14 +120,20 @@ export default defineConfig(({ mode }) => {
                       });
 
                     if (rootFiles.length > 0) {
-                      folders.unshift({
-                        name: 'Miscellaneous',
-                        files: rootFiles
-                      });
+                      const miscFolder = folders.find(f => f.name === 'Miscellaneous');
+                      if (miscFolder) {
+                        miscFolder.files = [...rootFiles, ...miscFolder.files];
+                      } else {
+                        folders.unshift({
+                          name: 'Miscellaneous',
+                          files: rootFiles
+                        });
+                      }
                     }
 
-                    // Sort folders by creation time or name (desc) to show newest first?
-                    // readdirSync doesn't give time, would need stat. Let's sort by name desc as it contains timestamp.
+                    // Sort folders by name (desc) to show newest first?
+                    // Excluding Miscellaneous from sort to keep it at top if added via unshift?
+                    // Actually, let's just sort and then maybe move Misc to top if needed.
                     folders.sort((a, b) => b.name.localeCompare(a.name));
                     result[type] = folders;
                   } catch (e) {

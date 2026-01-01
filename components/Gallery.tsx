@@ -364,8 +364,8 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                 </div>
             ) : (
                 <div className="space-y-12">
-                    {activeData.map((folder) => (
-                        <div key={folder.name} className="bg-slate-900/50 border border-slate-800 rounded-3xl p-6 backdrop-blur-sm relative group/card">
+                    {activeData.map((folder, folderIdx) => (
+                        <div key={`${folder.name}-${folderIdx}`} className="bg-slate-900/50 border border-slate-800 rounded-3xl p-6 backdrop-blur-sm relative group/card">
                             <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-800/50">
                                 <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center">
                                     <svg className="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -493,10 +493,10 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                if (onSendToUpscale) onSendToUpscale(file, "From Gallery");
+                                                                onSendToUpscale?.(file, "From Gallery");
                                                             }}
-                                                            className="bg-cyan-600/80 p-2 rounded-lg text-white hover:bg-cyan-600 transition-all backdrop-blur-md border border-white/10"
-                                                            title="Send to Upscale"
+                                                            className="bg-indigo-600/20 p-2 rounded-lg text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all backdrop-blur-md border border-indigo-500/30"
+                                                            title="Upscale"
                                                         >
                                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
@@ -506,10 +506,10 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                if (onSendToTurbo) onSendToTurbo({ imageUrl: file, prompt: "From Gallery" });
+                                                                onSendToTurbo?.({ imageUrl: file, prompt: "From Gallery" });
                                                             }}
-                                                            className="bg-indigo-600/80 p-2 rounded-lg text-white hover:bg-indigo-600 transition-all backdrop-blur-md border border-white/10"
-                                                            title="Send to TurboWan"
+                                                            className="bg-purple-600/20 p-2 rounded-lg text-purple-400 hover:bg-purple-600 hover:text-white transition-all backdrop-blur-md border border-purple-500/30"
+                                                            title="Video"
                                                         >
                                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -584,33 +584,31 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                         )}
 
                         {/* Action Buttons */}
-                        <div className="flex flex-row md:flex-col gap-4 min-w-[200px]">
+                        <div className="flex flex-row md:flex-col gap-4 min-w-[200px]" onClick={e => e.stopPropagation()}>
                             <button
                                 onClick={() => {
-                                    if (onSendToTurbo) {
-                                        onSendToTurbo({ imageUrl: selectedMedia, prompt: "From Gallery" });
-                                    }
+                                    onSendToUpscale?.(selectedMedia!, "From Gallery");
+                                    setSelectedMedia(null);
                                 }}
-                                className="flex items-center gap-3 px-6 py-4 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white font-bold text-sm backdrop-blur-md border border-white/10 transition-all shadow-xl active:scale-95 w-full justify-center group"
-                            >
-                                <svg className="w-5 h-5 group-hover:animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                </svg>
-                                Use in TurboWan
-                            </button>
-
-                            <button
-                                onClick={() => {
-                                    if (onSendToUpscale) {
-                                        onSendToUpscale(selectedMedia, "From Gallery");
-                                    }
-                                }}
-                                className="flex items-center gap-3 px-6 py-4 bg-cyan-600 hover:bg-cyan-500 rounded-xl text-white font-bold text-sm backdrop-blur-md border border-white/10 transition-all shadow-xl active:scale-95 w-full justify-center group"
+                                className="flex items-center gap-3 px-6 py-4 bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-xl font-bold text-sm backdrop-blur-md border border-indigo-600/50 transition-all shadow-xl active:scale-95 w-full justify-center group"
                             >
                                 <svg className="w-5 h-5 group-hover:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                                 </svg>
-                                Upscale Image
+                                Upscale
+                            </button>
+
+                            <button
+                                onClick={() => {
+                                    onSendToTurbo?.({ imageUrl: selectedMedia!, prompt: "From Gallery" });
+                                    setSelectedMedia(null);
+                                }}
+                                className="flex items-center gap-3 px-6 py-4 bg-purple-600/10 hover:bg-purple-600 text-purple-400 hover:text-white rounded-xl font-bold text-sm backdrop-blur-md border border-purple-600/50 transition-all shadow-xl active:scale-95 w-full justify-center group"
+                            >
+                                <svg className="w-5 h-5 group-hover:animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                                Video
                             </button>
                         </div>
                     </div>

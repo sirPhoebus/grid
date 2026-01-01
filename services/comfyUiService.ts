@@ -35,18 +35,25 @@ export class ComfyUiService {
     private static async uploadImage(imageInput: string, isQwen: boolean = false): Promise<string> {
         if (!imageInput) throw new Error("No image input provided for upload");
         let blob: Blob;
-        if (imageInput.startsWith('blob:')) {
+        if (imageInput.startsWith('blob:') || imageInput.startsWith('http') || imageInput.startsWith('/')) {
             const response = await fetch(imageInput);
             blob = await response.blob();
         } else {
             const cleanBase64 = imageInput.replace(/^data:image\/\w+;base64,/, '');
-            const byteCharacters = atob(cleanBase64);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            try {
+                const byteCharacters = atob(cleanBase64);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                blob = new Blob([byteArray], { type: 'image/png' });
+            } catch (e) {
+                // If atob fails, it might be a malformed URL or base64
+                // Try fetching it as a last resort if it's a string that might be a local path
+                const response = await fetch(imageInput);
+                blob = await response.blob();
             }
-            const byteArray = new Uint8Array(byteNumbers);
-            blob = new Blob([byteArray], { type: 'image/png' });
         }
         const formData = new FormData();
         const filename = `upload_${Date.now()}_${Math.floor(Math.random() * 1000)}.png`;
@@ -140,23 +147,43 @@ export class ComfyUiService {
         return { resultUrl };
     }
 
-    public static async runTurboWanWorkflow(base64Image: string, promptText: string, aspectRatio: string = "16:9"): Promise<{ videoUrl: string, lastFrameUrl: string, localVideoPath: string }> {
+    public static async runVideoWorkflow(base64Image: string, promptText: string, aspectRatio: string = "16:9", workflowType: 'turbowan' | 'qwen' = 'turbowan'): Promise<{ videoUrl: string, lastFrameUrl: string, localVideoPath: string }> {
         const filename = await this.uploadImage(base64Image);
-        const prompt = this.getTurboWanWorkflow(filename, promptText, aspectRatio);
+        const prompt = workflowType === 'turbowan'
+            ? this.getTurboWanWorkflow(filename, promptText, aspectRatio)
+            : this.getQwenVideoWorkflow(filename, promptText, aspectRatio);
+
         const { prompt_id } = await this.queuePrompt(prompt);
         await this.waitForExecution(prompt_id);
         const history = await this.getHistory(prompt_id);
         const outputs = history[prompt_id].outputs;
-        const videoCombineOutput = outputs['9'];
-        if (!videoCombineOutput || !videoCombineOutput.gifs || videoCombineOutput.gifs.length === 0) throw new Error("No output video found (Node 9)");
-        const videoInfo = videoCombineOutput.gifs[0];
+
+        const outputNodeId = workflowType === 'turbowan' ? '9' : '204';
+        const videoCombineOutput = outputs[outputNodeId];
+
+        if (!videoCombineOutput || (!videoCombineOutput.gifs && !videoCombineOutput.images) || (videoCombineOutput.gifs && videoCombineOutput.gifs.length === 0)) {
+            throw new Error(`No output video found (Node ${outputNodeId})`);
+        }
+
+        const videoInfo = videoCombineOutput.gifs ? videoCombineOutput.gifs[0] : videoCombineOutput.images[0];
         const videoUrl = `${this.API_BASE_URL}/view?filename=${videoInfo.filename}&subfolder=${videoInfo.subfolder}&type=${videoInfo.type}`;
-        const saveRes = await fetch('/save-video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: videoUrl }) });
+
+        const saveRes = await fetch('/save-video', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: videoUrl })
+        });
         const { path: localVideoPath } = await saveRes.json();
-        const previewOutput = outputs['8'];
-        if (!previewOutput || !previewOutput.images || previewOutput.images.length === 0) throw new Error("No preview images found (Node 8)");
+
+        const previewNodeId = workflowType === 'turbowan' ? '8' : '193:162';
+        const previewOutput = outputs[previewNodeId];
+        if (!previewOutput || !previewOutput.images || previewOutput.images.length === 0) {
+            throw new Error(`No preview images found (Node ${previewNodeId})`);
+        }
+
         const lastImageInfo = previewOutput.images[previewOutput.images.length - 1];
         const lastFrameUrl = await this.getImage(lastImageInfo.filename, lastImageInfo.subfolder, lastImageInfo.type);
+
         return { videoUrl, lastFrameUrl, localVideoPath };
     }
 
@@ -250,6 +277,43 @@ export class ComfyUiService {
             "271": { "inputs": { "image": ["179", 0], "pad_info": ["272", 0] }, "class_type": "CropWithPadInfo", "_meta": { "title": "Crop With Pad Info" } },
             "272": { "inputs": { "custom_output": ["268", 2] }, "class_type": "QwenEditOutputExtractor", "_meta": { "title": "Qwen Edit Output Extractor" } },
             "275": { "inputs": { "lora_name": "Rebalance_v1_lora_r16.safetensors", "strength_model": 0.6, "model": ["166", 0] }, "class_type": "LoraLoaderModelOnly", "_meta": { "title": "LoraLoaderModelOnly" } }
+        };
+    }
+
+    private static getQwenVideoWorkflow(inputFilename: string, promptText: string, aspectRatio: string) {
+        let width = 480; let height = 480;
+        if (aspectRatio === "16:9") { width = 848; height = 480; }
+        else if (aspectRatio === "9:16") { width = 480; height = 848; }
+        else if (aspectRatio === "4:3") { width = 640; height = 480; }
+        else if (aspectRatio === "3:4") { width = 480; height = 640; }
+
+        return {
+            "84": { "inputs": { "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors", "type": "wan", "device": "default" }, "class_type": "CLIPLoader" },
+            "90": { "inputs": { "vae_name": "Wan2_1_VAE_bf16.safetensors" }, "class_type": "VAELoader" },
+            "97": { "inputs": { "image": inputFilename }, "class_type": "LoadImage" },
+            "101": { "inputs": { "lora_name": "wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors", "strength_model": 1.0, "model": ["116", 0] }, "class_type": "LoraLoaderModelOnly" },
+            "102": { "inputs": { "lora_name": "wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors", "strength_model": 1.0, "model": ["117", 0] }, "class_type": "LoraLoaderModelOnly" },
+            "104": { "inputs": { "shift": 5.0, "model": ["141", 0] }, "class_type": "ModelSamplingSD3" },
+            "116": { "inputs": { "model_name": "Wan2_2-I2V-A14B-HIGH_fp8_e4m3fn_scaled_KJ.safetensors", "enable_fp16_accumulation": true, "sage_attention": "disabled", "weight_dtype": "default", "patch_cublaslinear": false, "compute_dtype": "default" }, "class_type": "DiffusionModelLoaderKJ" },
+            "117": { "inputs": { "model_name": "Wan2_2-I2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors", "enable_fp16_accumulation": true, "sage_attention": "disabled", "weight_dtype": "default", "patch_cublaslinear": false, "compute_dtype": "default" }, "class_type": "DiffusionModelLoaderKJ" },
+            "122": { "inputs": { "scheduler": "simple", "steps": 6, "denoise": 1, "model": ["104", 0] }, "class_type": "BasicScheduler" },
+            "127": { "inputs": { "sampler_name": "euler" }, "class_type": "KSamplerSelect" },
+            "128": { "inputs": { "step": 3, "sigmas": ["122", 0] }, "class_type": "SplitSigmas" },
+            "135": { "inputs": { "pixels": ["136", 0], "vae": ["90", 0] }, "class_type": "VAEEncode" },
+            "136": { "inputs": { "width": width, "height": height, "upscale_method": "lanczos", "keep_proportion": "crop", "divisible_by": 8, "crop_position": "top", "pad_color": "#000000", "device": "cpu", "image": ["97", 0] }, "class_type": "ImageResizeKJv2" },
+            "141": { "inputs": { "lora_name": "SVI_v2_PRO_Wan2.2-I2V-A14B_HIGH_lora_rank_128_fp16.safetensors", "strength_model": 1, "model": ["101", 0] }, "class_type": "LoraLoaderModelOnly" },
+            "142": { "inputs": { "lora_name": "SVI_v2_PRO_Wan2.2-I2V-A14B_LOW_lora_rank_128_fp16.safetensors", "strength_model": 1, "model": ["102", 0] }, "class_type": "LoraLoaderModelOnly" },
+            "189": { "inputs": { "noise_seed": Math.floor(Math.random() * 1000000) }, "class_type": "RandomNoise" },
+            "204": { "inputs": { "frame_rate": 25, "loop_count": 0, "filename_prefix": "Wan22_SVI_Pro", "format": "video/h265-mp4", "pix_fmt": "yuv420p10le", "crf": 22, "save_output": true, "pingpong": false, "images": ["193:162", 0] }, "class_type": "VHS_VideoCombine" },
+            "193:159": { "inputs": { "cfg": 1, "model": ["142", 0], "positive": ["193:160", 0], "negative": ["193:160", 1], "start_percent": 0.0, "end_percent": 1.0 }, "class_type": "ScheduledCFGGuidance" },
+            "193:152": { "inputs": { "text": promptText, "clip": ["84", 0] }, "class_type": "CLIPTextEncode" },
+            "193:183": { "inputs": {}, "class_type": "DisableNoise" },
+            "193:158": { "inputs": { "cfg": 1, "model": ["141", 0], "positive": ["193:160", 0], "negative": ["193:160", 1], "start_percent": 0.0, "end_percent": 1.0 }, "class_type": "ScheduledCFGGuidance" },
+            "193:185": { "inputs": { "noise": ["189", 0], "guider": ["193:158", 0], "sampler": ["127", 0], "sigmas": ["128", 0], "latent_image": ["193:160", 2] }, "class_type": "SamplerCustomAdvanced" },
+            "193:160": { "inputs": { "length": 81, "positive": ["193:152", 0], "negative": ["193:182", 0], "anchor_samples": ["135", 0], "motion_latent_count": 1 }, "class_type": "WanImageToVideoSVIPro" },
+            "193:184": { "inputs": { "noise": ["193:183", 0], "guider": ["193:159", 0], "sampler": ["127", 0], "sigmas": ["128", 1], "latent_image": ["193:185", 0] }, "class_type": "SamplerCustomAdvanced" },
+            "193:162": { "inputs": { "samples": ["193:184", 0], "vae": ["90", 0] }, "class_type": "VAEDecode" },
+            "193:182": { "inputs": { "text": "", "clip": ["84", 0] }, "class_type": "CLIPTextEncode" }
         };
     }
 

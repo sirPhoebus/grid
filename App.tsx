@@ -76,7 +76,7 @@ const Header: React.FC<{
             : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
             }`}
         >
-          TurboWan
+          Video
         </button>
         <button
           onClick={() => onNavigate('home')}
@@ -795,9 +795,7 @@ const App: React.FC = () => {
       {overlayMedia && <MediaOverlay media={overlayMedia} onClose={() => setOverlayMedia(null)} />}
 
       <main className="max-w-6xl mx-auto mt-12 px-6">
-        {currentView === 'gallery' ? (
-          <Gallery />
-        ) : currentView === 'upscale' ? (
+        {currentView === 'upscale' ? (
           <div className="max-w-4xl mx-auto">
             {!individualState.originalPreview ? (
               <div className="max-w-xl mx-auto">
@@ -854,7 +852,11 @@ const App: React.FC = () => {
                   <div className="space-y-2">
                     <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Original</h3>
                     <div className="bg-slate-900 rounded-2xl overflow-hidden border border-slate-800">
-                      <img src={individualState.originalPreview} className="w-full h-auto" alt="Original" />
+                      {(individualState.originalPreview?.endsWith('.mp4') || individualState.originalPreview?.endsWith('.webm')) ? (
+                        <video src={individualState.originalPreview} className="w-full h-auto" autoPlay loop muted controls />
+                      ) : (
+                        <img src={individualState.originalPreview!} className="w-full h-auto" alt="Original" />
+                      )}
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -864,7 +866,11 @@ const App: React.FC = () => {
                         <div
                           className="bg-slate-900 rounded-2xl overflow-hidden border border-indigo-500/30 relative group"
                         >
-                          <img src={individualState.upscaledPreview} className="w-full h-auto" alt="Upscaled" />
+                          {(individualState.upscaledPreview.endsWith('.mp4') || individualState.upscaledPreview.endsWith('.webm')) ? (
+                            <video src={individualState.upscaledPreview} className="w-full h-auto" autoPlay loop muted controls />
+                          ) : (
+                            <img src={individualState.upscaledPreview} className="w-full h-auto" alt="Upscaled" />
+                          )}
                           <div
                             className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-zoom-in"
                             onClick={() => setOverlayMedia({ url: individualState.upscaledPreview!, type: 'image' })}

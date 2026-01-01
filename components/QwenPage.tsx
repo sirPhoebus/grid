@@ -329,7 +329,7 @@ export const QwenPage: React.FC<QwenPageProps> = ({ onPreviewImage, onSendToTurb
                                                 onClick={() => onSendToTurbo?.({ imageUrl: resultUrls.resultUrl, prompt })}
                                                 className="px-4 py-2 bg-purple-600/10 hover:bg-purple-600 text-purple-400 hover:text-white rounded-full text-xs font-bold transition-all border border-purple-600/50 flex items-center gap-2 shadow-lg"
                                             >
-                                                TurboWan
+                                                Video
                                             </button>
                                         </div>
                                     </h3>

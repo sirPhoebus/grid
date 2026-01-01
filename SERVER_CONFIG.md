@@ -45,7 +45,7 @@ server: {
 
 ```typescript
 paths: {
-  loraDir: 'D:\\comfui-Python3.12\\ComfyUI\\models\\loras',
+  loraDir: 'D:\\comfui-Python3.12\\ComfyUI\\models\\loras\\goodZ',
   mediaDir: 'media',
   mediaTypes: ['sliced_img', 'upscale', 'individual_upscale', 'turbowan', 'stitched', 'z_image', 'inverse'],
 }
