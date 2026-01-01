@@ -950,7 +950,24 @@ const App: React.FC = () => {
         ) : currentView === 'help' ? (
           <Help />
         ) : currentView === 'qwen-edit' ? (
-          <QwenPage />
+          <QwenPage
+            onPreviewImage={(url) => setOverlayMedia({ url, type: 'image' })}
+            onSendToTurbo={(data) => {
+              setTurboHandover(data);
+              setCurrentView('turbo-wan');
+            }}
+            onSendToUpscale={(imageUrl, prompt) => {
+              setIndividualState({
+                file: null,
+                originalPreview: imageUrl,
+                upscaledPreview: null,
+                isProcessing: false,
+                error: null,
+                prompt: prompt || ""
+              });
+              setCurrentView('upscale');
+            }}
+          />
         ) : currentView === 'gallery' ? (
 
           <Gallery

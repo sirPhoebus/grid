@@ -14,6 +14,7 @@ interface MediaData {
     stitched: MediaFolder[];
     z_image: MediaFolder[];
     inverse: MediaFolder[];
+    qwen_gallery: MediaFolder[];
 }
 
 interface GalleryProps {
@@ -23,9 +24,9 @@ interface GalleryProps {
 
 export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale }) => {
     const [data, setData] = useState<MediaData>({
-        sliced_img: [], upscale: [], individual_upscale: [], turbowan: [], stitched: [], z_image: [], inverse: []
+        sliced_img: [], upscale: [], individual_upscale: [], turbowan: [], stitched: [], z_image: [], inverse: [], qwen_gallery: []
     });
-    const [activeTab, setActiveTab] = useState<'sliced_img' | 'upscale' | 'individual_upscale' | 'turbowan' | 'stitched' | 'z_image' | 'inverse'>('z_image');
+    const [activeTab, setActiveTab] = useState<'sliced_img' | 'upscale' | 'individual_upscale' | 'turbowan' | 'stitched' | 'z_image' | 'inverse' | 'qwen_gallery'>('z_image');
     const [loading, setLoading] = useState(true);
     const [selectedMedia, setSelectedMedia] = useState<string | null>(null);
     const [isMediaVideo, setIsMediaVideo] = useState(false);
@@ -44,7 +45,8 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                     turbowan: data.turbowan || [],
                     stitched: data.stitched || [],
                     z_image: data.z_image || [],
-                    inverse: data.inverse || []
+                    inverse: data.inverse || [],
+                    qwen_gallery: data.qwen_gallery || []
                 });
                 setLoading(false);
             })
@@ -329,6 +331,15 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                     >
                         Inverse
                     </button>
+                    <button
+                        onClick={() => setActiveTab('qwen_gallery')}
+                        className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all ${activeTab === 'qwen_gallery'
+                            ? 'bg-emerald-600 text-white shadow-lg'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                            }`}
+                    >
+                        Qwen Pro
+                    </button>
                 </div>
             </div>
 
@@ -479,11 +490,31 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                                             </svg>
                                                         </a>
-                                                        <div className="bg-indigo-600 p-2 rounded-lg text-white backdrop-blur-md border border-white/10 shadow-lg shadow-indigo-500/20">
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (onSendToUpscale) onSendToUpscale(file, "From Gallery");
+                                                            }}
+                                                            className="bg-cyan-600/80 p-2 rounded-lg text-white hover:bg-cyan-600 transition-all backdrop-blur-md border border-white/10"
+                                                            title="Send to Upscale"
+                                                        >
                                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                                                             </svg>
-                                                        </div>
+                                                        </button>
+
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (onSendToTurbo) onSendToTurbo({ imageUrl: file, prompt: "From Gallery" });
+                                                            }}
+                                                            className="bg-indigo-600/80 p-2 rounded-lg text-white hover:bg-indigo-600 transition-all backdrop-blur-md border border-white/10"
+                                                            title="Send to TurboWan"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                                            </svg>
+                                                        </button>
                                                     </div>
                                                 )}
                                             </div>

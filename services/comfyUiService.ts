@@ -114,6 +114,20 @@ export class ComfyUiService {
         return { resultUrl, concatUrl };
     }
 
+    public static async runQwenDoubleEditWorkflow(images: string[], promptText: string): Promise<{ resultUrl: string, concatUrl: string }> {
+        const filenames = await Promise.all(images.map(img => this.uploadImage(img, true)));
+        const workflow = this.getQwenDoubleEditWorkflow(filenames, promptText);
+        const { prompt_id } = await this.queuePrompt(workflow, true);
+        await this.waitForExecution(prompt_id, true);
+        const history = await this.getHistory(prompt_id, true);
+        const outputs = history[prompt_id].outputs;
+        const resultOutput = outputs['105'];
+        const resultUrl = resultOutput?.images?.[0] ? await this.getImage(resultOutput.images[0].filename, resultOutput.images[0].subfolder, resultOutput.images[0].type, true) : "";
+        const concatOutput = outputs['321'];
+        const concatUrl = concatOutput?.images?.[0] ? await this.getImage(concatOutput.images[0].filename, concatOutput.images[0].subfolder, concatOutput.images[0].type, true) : "";
+        return { resultUrl, concatUrl };
+    }
+
     public static async runQwenSingleEditWorkflow(image: string, promptText: string): Promise<{ resultUrl: string }> {
         const filename = await this.uploadImage(image, true);
         const workflow = this.getQwenSingleEditWorkflow(filename, promptText);
@@ -177,13 +191,42 @@ export class ComfyUiService {
             "299": { "inputs": { "Number": 1920 }, "class_type": "Int", "_meta": { "title": "image_2" } },
             "300": { "inputs": { "Number": 1920 }, "class_type": "Int", "_meta": { "title": "image_3" } },
             "303": { "inputs": { "to_ref": true, "ref_main_image": true, "ref_longest_edge": ["299", 0], "ref_crop": "pad", "ref_upscale": "lanczos", "to_vl": true, "vl_resize": true, "vl_target_size": 384, "vl_crop": "center", "vl_upscale": "bicubic", "image": ["310", 0], "configs": ["269", 0] }, "class_type": "QwenEditConfigPreparer", "_meta": { "title": "Qwen Edit Config Preparer" } },
-            "306": { "inputs": { "to_ref": true, "ref_main_image": true, "ref_longest_edge": ["300", 0], "ref_crop": "pad", "ref_upscale": "lanczos", "to_vl": true, "vl_resize": true, "vl_target_size": 384, "vl_crop": "center", "vl_upscale": "bicubic", "image": ["311", 0], "configs": ["319", 0] }, "class_type": "QwenEditConfigPreparer", "_meta": { "title": "Qwen Edit Config Preparer" } },
+            "306": { "inputs": { "to_ref": true, "ref_main_image": true, "ref_longest_edge": ["300", 0], "ref_crop": "pad", "ref_upscale": "lanczos", "to_vl": true, "vl_resize": true, "vl_target_size": 384, "vl_crop": "center", "vl_upscale": "bicubic", "image": ["311", 0], "configs": ["303", 0] }, "class_type": "QwenEditConfigPreparer", "_meta": { "title": "Qwen Edit Config Preparer" } },
             "310": { "inputs": { "aspect_ratio": "original", "proportional_width": 1, "proportional_height": 1, "fit": "crop", "method": "lanczos", "round_to_multiple": "16", "scale_to_side": "longest", "scale_to_length": ["299", 0], "background_color": "#000000", "image": ["277", 0] }, "class_type": "LayerUtility: ImageScaleByAspectRatio V2", "_meta": { "title": "ImageScaleByAspectRatio" } },
             "311": { "inputs": { "aspect_ratio": "original", "proportional_width": 1, "proportional_height": 1, "fit": "crop", "method": "lanczos", "round_to_multiple": "16", "scale_to_side": "longest", "scale_to_length": ["300", 0], "background_color": "#000000", "image": ["313", 0] }, "class_type": "LayerUtility: ImageScaleByAspectRatio V2", "_meta": { "title": "ImageScaleByAspectRatio" } },
             "313": { "inputs": { "image": filenames[2] }, "class_type": "LoadImage", "_meta": { "title": "Load Image" } },
             "315": { "inputs": { "lora_name": "Rebalance_v1_lora_r16.safetensors", "strength_model": 0.6, "model": ["166", 0] }, "class_type": "LoraLoaderModelOnly", "_meta": { "title": "LoraLoader" } },
-            "319": { "inputs": { "configs": ["303", 0] }, "class_type": "QwenEditConfigPasser", "_meta": { "title": "Passer" } },
             "320": { "inputs": { "filename_prefix": "QwenConcat", "images": ["289", 0] }, "class_type": "SaveImage", "_meta": { "title": "Save Concat" } }
+        };
+    }
+
+    private static getQwenDoubleEditWorkflow(filenames: string[], promptText: string) {
+        return {
+            "74": { "inputs": { "image": filenames[0] }, "class_type": "LoadImage", "_meta": { "title": "Load Image" } },
+            "104": { "inputs": { "Number": 1920 }, "class_type": "Int", "_meta": { "title": "image_1" } },
+            "105": { "inputs": { "filename_prefix": "QwenResult", "images": ["271", 0] }, "class_type": "SaveImage", "_meta": { "title": "Save Image" } },
+            "166": { "inputs": { "unet_name": "qwen_image_edit_2511_fp8mixed.safetensors", "weight_dtype": "default" }, "class_type": "UNETLoader", "_meta": { "title": "Load Diffusion Model" } },
+            "169": { "inputs": { "aspect_ratio": "original", "proportional_width": 1, "proportional_height": 1, "fit": "crop", "method": "lanczos", "round_to_multiple": "16", "scale_to_side": "longest", "scale_to_length": ["104", 0], "background_color": "#000000", "image": ["74", 0] }, "class_type": "LayerUtility: ImageScaleByAspectRatio V2", "_meta": { "title": "LayerUtility: ImageScaleByAspectRatio V2" } },
+            "170": { "inputs": { "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors", "type": "qwen_image", "device": "default" }, "class_type": "CLIPLoader", "_meta": { "title": "Load CLIP" } },
+            "175": { "inputs": { "vae_name": "qwen_image_vae.safetensors" }, "class_type": "VAELoader", "_meta": { "title": "Load VAE" } },
+            "177": { "inputs": { "conditioning": ["268", 0] }, "class_type": "ConditioningZeroOut", "_meta": { "title": "ConditioningZeroOut" } },
+            "178": { "inputs": { "seed": Math.floor(Math.random() * 1000000000000000), "steps": 8, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "denoise": 1, "model": ["180", 0], "positive": ["268", 0], "negative": ["177", 0], "latent_image": ["268", 1] }, "class_type": "KSampler", "_meta": { "title": "KSampler" } },
+            "179": { "inputs": { "samples": ["178", 0], "vae": ["175", 0] }, "class_type": "VAEDecode", "_meta": { "title": "VAE Decode" } },
+            "180": { "inputs": { "lora_name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors", "strength_model": 1, "model": ["315", 0] }, "class_type": "LoraLoaderModelOnly", "_meta": { "title": "LoraLoaderModelOnly" } },
+            "211": { "inputs": { "image_a": ["74", 0], "image_b": ["271", 0] }, "class_type": "Image Comparer (rgthree)", "_meta": { "title": "Image Comparer (rgthree)" } },
+            "266": { "inputs": { "prompt": promptText }, "class_type": "CR Prompt Text", "_meta": { "title": "⚙️ CR Prompt Text" } },
+            "268": { "inputs": { "prompt": ["266", 0], "return_full_refs_cond": true, "instruction": "Describe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate.", "clip": ["170", 0], "vae": ["175", 0], "configs": ["303", 0] }, "class_type": "TextEncodeQwenImageEditPlusCustom_lrzjason", "_meta": { "title": "TextEncodeQwenImageEditPlusCustom lrzjason" } },
+            "269": { "inputs": { "to_ref": true, "ref_main_image": true, "ref_longest_edge": ["104", 0], "ref_crop": "pad", "ref_upscale": "lanczos", "to_vl": true, "vl_resize": true, "vl_target_size": 384, "vl_crop": "center", "vl_upscale": "bicubic", "image": ["169", 0] }, "class_type": "QwenEditConfigPreparer", "_meta": { "title": "Qwen Edit Config Preparer" } },
+            "271": { "inputs": { "image": ["179", 0], "pad_info": ["272", 0] }, "class_type": "CropWithPadInfo", "_meta": { "title": "Crop With Pad Info" } },
+            "272": { "inputs": { "custom_output": ["268", 2] }, "class_type": "QwenEditOutputExtractor", "_meta": { "title": "Qwen Edit Output Extractor" } },
+            "277": { "inputs": { "image": filenames[1] }, "class_type": "LoadImage", "_meta": { "title": "Load Image" } },
+            "289": { "inputs": { "direction": "right", "match_image_size": true, "image1": ["290", 0], "image2": ["271", 0] }, "class_type": "ImageConcanate", "_meta": { "title": "Image Concatenate" } },
+            "290": { "inputs": { "inputcount": 2, "direction": "down", "match_image_size": true, "image_1": ["74", 0], "image_2": ["277", 0] }, "class_type": "ImageConcatMulti", "_meta": { "title": "Image Concat Multi" } },
+            "299": { "inputs": { "Number": 1536 }, "class_type": "Int", "_meta": { "title": "image_2" } },
+            "303": { "inputs": { "to_ref": true, "ref_main_image": true, "ref_longest_edge": ["299", 0], "ref_crop": "pad", "ref_upscale": "lanczos", "to_vl": true, "vl_resize": true, "vl_target_size": 384, "vl_crop": "center", "vl_upscale": "bicubic", "image": ["310", 0], "configs": ["269", 0] }, "class_type": "QwenEditConfigPreparer", "_meta": { "title": "Qwen Edit Config Preparer" } },
+            "310": { "inputs": { "aspect_ratio": "original", "proportional_width": 1, "proportional_height": 1, "fit": "crop", "method": "lanczos", "round_to_multiple": "16", "scale_to_side": "longest", "scale_to_length": ["299", 0], "background_color": "#000000", "image": ["277", 0] }, "class_type": "LayerUtility: ImageScaleByAspectRatio V2", "_meta": { "title": "LayerUtility: ImageScaleByAspectRatio V2" } },
+            "315": { "inputs": { "lora_name": "Rebalance_v1_lora_r16.safetensors", "strength_model": 0.6, "model": ["166", 0] }, "class_type": "LoraLoaderModelOnly", "_meta": { "title": "LoraLoaderModelOnly" } },
+            "321": { "inputs": { "filename_prefix": "QwenDoubleConcat", "images": ["289", 0] }, "class_type": "SaveImage", "_meta": { "title": "Save Image" } }
         };
     }
 
@@ -339,9 +382,75 @@ export class ComfyUiService {
 
     private static getWorkflow(inputFilename: string) {
         return {
-            "10": { "inputs": { "seed": 0, "resolution": 2048, "max_resolution": 4096, "batch_size": 1, "uniform_batch_size": false, "color_correction": "lab", "temporal_overlap": 0, "prepend_frames": 0, "input_noise_scale": 0, "latent_noise_scale": 0, "offload_device": "cpu", "enable_debug": false, "image": ["17", 0] }, "class_type": "UltimateSDUpscale", "_meta": { "title": "Upscale" } },
-            "15": { "inputs": { "filename_prefix": "upscale", "images": ["10", 0] }, "class_type": "SaveImage", "_meta": { "title": "Save" } },
-            "17": { "inputs": { "image": inputFilename, "upload": "image" }, "class_type": "LoadImage", "_meta": { "title": "Load" } }
+            "10": {
+                "inputs": {
+                    "seed": Math.floor(Math.random() * 1000000),
+                    "resolution": 4096,
+                    "max_resolution": 4096,
+                    "batch_size": 1,
+                    "uniform_batch_size": false,
+                    "color_correction": "lab",
+                    "temporal_overlap": 0,
+                    "prepend_frames": 0,
+                    "input_noise_scale": 0,
+                    "latent_noise_scale": 0,
+                    "offload_device": "cpu",
+                    "enable_debug": false,
+                    "image": ["17", 0],
+                    "dit": ["14", 0],
+                    "vae": ["13", 0]
+                },
+                "class_type": "SeedVR2VideoUpscaler",
+                "_meta": { "title": "SeedVR2 Video Upscaler" }
+            },
+            "13": {
+                "inputs": {
+                    "model": "ema_vae_fp16.safetensors",
+                    "device": "cuda:0",
+                    "encode_tiled": true,
+                    "encode_tile_size": 1024,
+                    "encode_tile_overlap": 128,
+                    "decode_tiled": true,
+                    "decode_tile_size": 1024,
+                    "decode_tile_overlap": 128,
+                    "tile_debug": "false",
+                    "offload_device": "cpu",
+                    "cache_model": false
+                },
+                "class_type": "SeedVR2LoadVAEModel"
+            },
+            "14": {
+                "inputs": {
+                    "model": "seedvr2_ema_7b_sharp_fp16.safetensors",
+                    "device": "cuda:0",
+                    "blocks_to_swap": 36,
+                    "swap_io_components": false,
+                    "offload_device": "cpu",
+                    "cache_model": false,
+                    "attention_mode": "sdpa"
+                },
+                "class_type": "SeedVR2LoadDiTModel"
+            },
+            "15": {
+                "inputs": {
+                    "filename_prefix": "upscale",
+                    "images": ["10", 0]
+                },
+                "class_type": "SaveImage"
+            },
+            "16": {
+                "inputs": {
+                    "image": inputFilename
+                },
+                "class_type": "LoadImage"
+            },
+            "17": {
+                "inputs": {
+                    "image": ["16", 0],
+                    "alpha": ["16", 1]
+                },
+                "class_type": "JoinImageWithAlpha"
+            }
         };
     }
 }

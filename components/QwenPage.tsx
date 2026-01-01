@@ -37,15 +37,23 @@ const XMarkIcon = ({ className }: { className?: string }) => (
     </svg>
 );
 
-export const QwenPage: React.FC = () => {
-    const [mode, setMode] = useState<'single' | 'triple'>('single');
+interface QwenPageProps {
+    onPreviewImage?: (url: string) => void;
+    onSendToTurbo?: (data: { imageUrl: string, prompt: string }) => void;
+    onSendToUpscale?: (imageUrl: string, prompt: string) => void;
+}
+
+export const QwenPage: React.FC<QwenPageProps> = ({ onPreviewImage, onSendToTurbo, onSendToUpscale }) => {
+    const [mode, setMode] = useState<'single' | 'double' | 'triple'>('single');
     const [images, setImages] = useState<(string | null)[]>([null, null, null]);
+    const [doubleImages, setDoubleImages] = useState<(string | null)[]>([null, null]);
     const [singleImage, setSingleImage] = useState<string | null>(null);
-    const [prompt, setPrompt] = useState('Remove the background and put it on a futuristic neon city street at night.');
+    const [prompt, setPrompt] = useState('replace silhouette in image2 with the girl from image1');
     const [isGenerating, setIsGenerating] = useState(false);
     const [resultUrls, setResultUrls] = useState<{ resultUrl: string, concatUrl?: string } | null>(null);
     const [error, setError] = useState<string | null>(null);
     const fileInputRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
+    const doubleFileInputRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
     const singleFileInputRef = useRef<HTMLInputElement>(null);
 
     const handleImageUpload = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -53,9 +61,15 @@ export const QwenPage: React.FC = () => {
         if (!file) return;
         const reader = new FileReader();
         reader.onload = (event) => {
-            const newImages = [...images];
-            newImages[index] = event.target?.result as string;
-            setImages(newImages);
+            if (mode === 'triple') {
+                const newImages = [...images];
+                newImages[index] = event.target?.result as string;
+                setImages(newImages);
+            } else if (mode === 'double') {
+                const newImages = [...doubleImages];
+                newImages[index] = event.target?.result as string;
+                setDoubleImages(newImages);
+            }
         };
         reader.readAsDataURL(file);
     };
@@ -75,6 +89,10 @@ export const QwenPage: React.FC = () => {
             setError("Please upload all 3 images first.");
             return;
         }
+        if (mode === 'double' && doubleImages.some(img => img === null)) {
+            setError("Please upload both images first.");
+            return;
+        }
         if (mode === 'single' && !singleImage) {
             setError("Please upload a source image first.");
             return;
@@ -86,9 +104,20 @@ export const QwenPage: React.FC = () => {
             if (mode === 'triple') {
                 const result = await ComfyUiService.runQwenEditWorkflow(images as string[], prompt);
                 setResultUrls(result);
+                // Auto-save results to root Miscellaneous folder
+                handleSaveToGallery(result.resultUrl, 'qwen_result', false);
+                if (result.concatUrl) handleSaveToGallery(result.concatUrl, 'qwen_concat', false);
+            } else if (mode === 'double') {
+                const result = await ComfyUiService.runQwenDoubleEditWorkflow(doubleImages as string[], prompt);
+                setResultUrls(result);
+                // Auto-save results to root Miscellaneous folder
+                handleSaveToGallery(result.resultUrl, 'qwen_result', false);
+                if (result.concatUrl) handleSaveToGallery(result.concatUrl, 'qwen_concat', false);
             } else {
                 const result = await ComfyUiService.runQwenSingleEditWorkflow(singleImage as string, prompt);
                 setResultUrls(result);
+                // Auto-save result to root Miscellaneous folder
+                handleSaveToGallery(result.resultUrl, 'qwen_single', false);
             }
         } catch (err: any) {
             setError(err.message || 'Generation failed');
@@ -97,23 +126,33 @@ export const QwenPage: React.FC = () => {
         }
     };
 
-    const handleSaveToGallery = async (imageUrl: string, prefix: string) => {
+    const handleSaveToGallery = async (imageUrl: string, prefix: string, showAlert = true) => {
         try {
-            const filename = `${prefix}_${Date.now()}.png`;
-            const response = await fetch('/save-slice', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    image: imageUrl,
-                    filename: filename,
-                    targetDir: 'qwen_gallery'
-                })
-            });
-            if (response.ok) {
-                alert('Saved to gallery!');
-            }
+            const blobResponse = await fetch(imageUrl);
+            const blob = await blobResponse.blob();
+
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onloadend = async () => {
+                const base64data = reader.result as string;
+                const filename = `${prefix}_${Date.now()}.png`;
+                const response = await fetch('/save-slice', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        image: base64data,
+                        filename: filename,
+                        folder: 'Miscellaneous',
+                        targetDir: 'qwen_gallery'
+                    })
+                });
+                if (response.ok && showAlert) {
+                    alert('Saved to gallery!');
+                }
+            };
         } catch (err) {
             console.error('Failed to save to gallery', err);
+            if (showAlert) alert('Error processing image for gallery.');
         }
     };
 
@@ -131,13 +170,19 @@ export const QwenPage: React.FC = () => {
                             onClick={() => { setMode('single'); setResultUrls(null); }}
                             className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${mode === 'single' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                         >
-                            Single Image
+                            Single
+                        </button>
+                        <button
+                            onClick={() => { setMode('double'); setResultUrls(null); }}
+                            className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${mode === 'double' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            Double
                         </button>
                         <button
                             onClick={() => { setMode('triple'); setResultUrls(null); }}
                             className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${mode === 'triple' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                         >
-                            Triple Image
+                            Triple
                         </button>
                     </div>
                 </header>
@@ -173,6 +218,31 @@ export const QwenPage: React.FC = () => {
                                                 </button>
                                             )}
                                             <input type="file" ref={fileInputRefs[idx]} className="hidden" accept="image/*" onChange={(e) => handleImageUpload(idx, e)} />
+                                        </div>
+                                    ))
+                                ) : mode === 'double' ? (
+                                    doubleImages.map((img, idx) => (
+                                        <div key={idx} className="relative group overflow-hidden rounded-xl border-2 border-dashed border-slate-700 hover:border-indigo-500/50 transition-all duration-300 h-40 flex items-center justify-center bg-slate-950">
+                                            {img ? (
+                                                <>
+                                                    <img src={img} alt={`Double Input ${idx + 1}`} className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                                                    <button
+                                                        onClick={() => { const ni = [...doubleImages]; ni[idx] = null; setDoubleImages(ni); }}
+                                                        className="absolute top-2 right-2 p-1 bg-black/50 rounded-full text-white hover:bg-red-500/80 transition-colors z-10"
+                                                    >
+                                                        <XMarkIcon className="w-4 h-4" />
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <button
+                                                    onClick={() => doubleFileInputRefs[idx].current?.click()}
+                                                    className="flex flex-col items-center gap-2 text-slate-500 hover:text-indigo-400 transition-colors"
+                                                >
+                                                    <ArrowUpTrayIcon className="w-8 h-8" />
+                                                    <span className="text-xs font-semibold uppercase tracking-wider">Reference {idx + 1}</span>
+                                                </button>
+                                            )}
+                                            <input type="file" ref={doubleFileInputRefs[idx]} className="hidden" accept="image/*" onChange={(e) => handleImageUpload(idx, e)} />
                                         </div>
                                     ))
                                 ) : (
@@ -214,8 +284,8 @@ export const QwenPage: React.FC = () => {
                             />
                             <button
                                 onClick={handleGenerate}
-                                disabled={isGenerating || (mode === 'triple' ? images.some(img => !img) : !singleImage)}
-                                className={`w-full py-4 rounded-xl flex items-center justify-center gap-3 font-bold text-lg transition-all duration-300 shadow-lg ${isGenerating || (mode === 'triple' ? images.some(img => !img) : !singleImage)
+                                disabled={isGenerating || (mode === 'triple' ? images.some(img => !img) : mode === 'double' ? doubleImages.some(img => !img) : !singleImage)}
+                                className={`w-full py-4 rounded-xl flex items-center justify-center gap-3 font-bold text-lg transition-all duration-300 shadow-lg ${isGenerating || (mode === 'triple' ? images.some(img => !img) : mode === 'double' ? doubleImages.some(img => !img) : !singleImage)
                                     ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
                                     : 'bg-gradient-to-r from-cyan-600 to-blue-700 hover:from-cyan-500 hover:to-blue-600 text-white hover:scale-[1.02] shadow-cyan-500/10 border border-cyan-500/30'
                                     }`}
@@ -248,15 +318,31 @@ export const QwenPage: React.FC = () => {
                                             <div className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse" />
                                             Result Artifact
                                         </span>
-                                        <button
-                                            onClick={() => handleSaveToGallery(resultUrls.resultUrl, mode === 'single' ? 'qwen_single' : 'qwen_result')}
-                                            className="px-4 py-2 bg-cyan-600/10 hover:bg-cyan-600 text-cyan-400 hover:text-white rounded-full text-sm font-bold transition-all border border-cyan-600/50 flex items-center gap-2 shadow-lg hover:shadow-cyan-600/20"
-                                        >
-                                            <CheckCircleIcon className="w-4 h-4" /> Save Result
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => onSendToUpscale?.(resultUrls.resultUrl, prompt)}
+                                                className="px-4 py-2 bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-full text-xs font-bold transition-all border border-indigo-600/50 flex items-center gap-2 shadow-lg"
+                                            >
+                                                Upscale
+                                            </button>
+                                            <button
+                                                onClick={() => onSendToTurbo?.({ imageUrl: resultUrls.resultUrl, prompt })}
+                                                className="px-4 py-2 bg-purple-600/10 hover:bg-purple-600 text-purple-400 hover:text-white rounded-full text-xs font-bold transition-all border border-purple-600/50 flex items-center gap-2 shadow-lg"
+                                            >
+                                                TurboWan
+                                            </button>
+                                        </div>
                                     </h3>
-                                    <div className="aspect-video relative rounded-2xl overflow-hidden border border-slate-700 bg-slate-950 shadow-inner group cursor-zoom-in">
+                                    <div
+                                        className="aspect-video relative rounded-2xl overflow-hidden border border-slate-700 bg-slate-950 shadow-inner group cursor-zoom-in"
+                                        onClick={() => onPreviewImage?.(resultUrls.resultUrl)}
+                                    >
                                         <img src={resultUrls.resultUrl} className="w-full h-full object-contain" alt="Final Result" />
+                                        <div className="absolute inset-0 bg-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                                            <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-white text-[10px] font-bold uppercase tracking-widest translate-y-4 group-hover:translate-y-0 transition-all duration-500">
+                                                Click to Preview
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -267,15 +353,31 @@ export const QwenPage: React.FC = () => {
                                                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
                                                 Comparison View
                                             </span>
-                                            <button
-                                                onClick={() => handleSaveToGallery(resultUrls.concatUrl!, 'qwen_concat')}
-                                                className="px-4 py-2 bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white rounded-full text-sm font-bold transition-all border border-blue-600/50 flex items-center gap-2 shadow-lg hover:shadow-blue-600/20"
-                                            >
-                                                <CheckCircleIcon className="w-4 h-4" /> Save Comparison
-                                            </button>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => onSendToUpscale?.(resultUrls.concatUrl!, prompt)}
+                                                    className="px-4 py-2 bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-full text-xs font-bold transition-all border border-indigo-600/50 flex items-center gap-2 shadow-lg"
+                                                >
+                                                    Upscale
+                                                </button>
+                                                <button
+                                                    onClick={() => onSendToTurbo?.({ imageUrl: resultUrls.concatUrl!, prompt })}
+                                                    className="px-4 py-2 bg-purple-600/10 hover:bg-purple-600 text-purple-400 hover:text-white rounded-full text-xs font-bold transition-all border border-purple-600/50 flex items-center gap-2 shadow-lg"
+                                                >
+                                                    TurboWan
+                                                </button>
+                                            </div>
                                         </h3>
-                                        <div className="aspect-auto relative rounded-2xl overflow-hidden border border-slate-700 bg-slate-950 shadow-inner group">
+                                        <div
+                                            className="aspect-auto relative rounded-2xl overflow-hidden border border-slate-700 bg-slate-950 shadow-inner group cursor-zoom-in"
+                                            onClick={() => onPreviewImage?.(resultUrls.concatUrl!)}
+                                        >
                                             <img src={resultUrls.concatUrl} className="w-full h-full object-contain" alt="Concatenated Comparison" />
+                                            <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                                                <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-white text-[10px] font-bold uppercase tracking-widest translate-y-4 group-hover:translate-y-0 transition-all duration-500">
+                                                    Click to Preview
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
