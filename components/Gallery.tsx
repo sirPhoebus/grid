@@ -302,7 +302,7 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                             : 'text-slate-400 hover:text-white hover:bg-slate-800'
                             }`}
                     >
-                        Wan Segments
+                        Video Segments
                     </button>
                     <button
                         onClick={() => setActiveTab('stitched')}
@@ -454,7 +454,7 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                                                 )}
                                                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors pointer-events-none" />
 
-                                                {activeTab === 'stitched' && fileObj.duration && (
+                                                {isVideo && fileObj.duration && (
                                                     <div className={`absolute top-2 right-2 px-2 py-0.5 bg-black/60 rounded text-[10px] font-bold text-white shadow-lg backdrop-blur-sm border border-white/10 ${isSelectionMode ? 'opacity-50' : ''}`}>
                                                         {fileObj.duration}
                                                     </div>
@@ -462,7 +462,7 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
 
                                                 {fileObj.time && !isSelectionMode && activeTab !== 'z_image' && (
                                                     <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 rounded text-[10px] font-bold text-white shadow-lg backdrop-blur-sm border border-white/10">
-                                                        {new Date(fileObj.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                                                        {new Date(fileObj.time).toLocaleTimeString([], { minute: '2-digit', second: '2-digit', hour12: false })}
                                                     </div>
                                                 )}
 

@@ -81,7 +81,7 @@ export default defineConfig(({ mode }) => {
                               time = stats.mtime.toISOString();
                             } catch (e) { }
 
-                            if (type === 'stitched' && /\.(mp4|webm)$/i.test(f)) {
+                            if (/\.(mp4|webm)$/i.test(f)) {
                               try {
                                 const cmd = `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${fullPath}"`;
                                 const out = execSync(cmd).toString().trim();
@@ -109,7 +109,7 @@ export default defineConfig(({ mode }) => {
                           time = stats.mtime.toISOString();
                         } catch (e) { }
 
-                        if (type === 'stitched' && /\.(mp4|webm)$/i.test(dirent.name)) {
+                        if (/\.(mp4|webm)$/i.test(dirent.name)) {
                           try {
                             const cmd = `ffprobe -v error -show_entries format=duration -of default=nokey=1:nokey=1:noprint_wrappers=1 "${fullPath}"`;
                             const out = execSync(cmd).toString().trim();
@@ -431,8 +431,28 @@ export default defineConfig(({ mode }) => {
                   return;
                 }
 
-                const files = fs.readdirSync(loraDir);
-                const loras = files.filter(f => f.endsWith(serverConfig.files.loraExtension));
+                const getFilesRecursively = (dir: string, baseDir: string): string[] => {
+                  let results: string[] = [];
+                  const list = fs.readdirSync(dir);
+                  list.forEach(file => {
+                    const filePath = path.join(dir, file);
+                    const stat = fs.statSync(filePath);
+                    if (stat && stat.isDirectory()) {
+                      results = results.concat(getFilesRecursively(filePath, baseDir));
+                    } else if (file.endsWith(serverConfig.files.loraExtension)) {
+                      // Get relative path from baseDir
+                      // Even on Windows, ComfyUI API/Python usually prefers forward slashes for internal logic
+                      const relativePath = path.relative(baseDir, filePath).replace(/\\/g, '/');
+                      results.push(relativePath);
+                    }
+                  });
+                  return results;
+                };
+
+                const loras = getFilesRecursively(loraDir, loraDir);
+                console.log(`[LORAS] Found ${loras.length} LoRAs in ${loraDir}`);
+                if (loras.length > 0) console.log(`[LORAS] Sample: ${loras[0]}`);
+
                 res.statusCode = 200;
                 res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify(loras));

@@ -378,7 +378,7 @@ export class ComfyUiService {
             "70:44": { "inputs": { "seed": Math.floor(Math.random() * 1000000000000000), "steps": params.steps, "cfg": params.cfg || 1, "sampler_name": params.sampler_name, "scheduler": params.scheduler, "denoise": 1, "model": ["70:47", 0], "positive": ["70:45", 0], "negative": ["70:42", 0], "latent_image": ["70:83", 0] }, "class_type": "KSampler", "_meta": { "title": "Sampler" } },
             "70:86": { "inputs": { "seed": Math.floor(Math.random() * 1000000000000000), "steps": params.steps, "cfg": params.cfg || 1, "sampler_name": params.sampler_name, "scheduler": params.scheduler, "denoise": 0.35, "model": ["70:85", 0], "positive": ["70:45", 0], "negative": ["70:42", 0], "latent_image": ["70:44", 0] }, "class_type": "KSampler", "_meta": { "title": "Sampler" } }
         };
-        let nextNodeId = 100;
+        let nextNodeId = 500;
         if (params.loras) {
             params.loras.forEach(lora => {
                 const id = nextNodeId.toString();
@@ -406,7 +406,7 @@ export class ComfyUiService {
             "46": { "inputs": { "unet_name": params.unet_model || "zImage_turbo.safetensors", "weight_dtype": "default" }, "class_type": "UNETLoader", "_meta": { "title": "UNET" } },
             "47": { "inputs": { "shift": 3, "model": null }, "class_type": "ModelSamplingAuraFlow", "_meta": { "title": "Sampling" } }
         };
-        let nextNodeId = 100;
+        let nextNodeId = 500;
         if (params.loras) {
             params.loras.forEach(lora => {
                 const id = nextNodeId.toString();

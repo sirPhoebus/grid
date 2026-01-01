@@ -53,17 +53,41 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale, 
     const [globalPrompts, setGlobalPrompts] = useState<string[]>([]);
     const [isLoraModalOpen, setIsLoraModalOpen] = useState(false);
     const [availableLoras, setAvailableLoras] = useState<string[]>([]);
+    const [loraSearch, setLoraSearch] = useState('');
     const [depthImageUrl, setDepthImageUrl] = useState<string | null>(null);
 
-    useEffect(() => {
-        // Fetch LoRAs on mount
+    const [comfyLoras, setComfyLoras] = useState<string[]>([]);
+
+    const fetchLoras = () => {
         fetch('/list-loras')
             .then(res => res.json())
             .then(data => {
                 if (Array.isArray(data)) setAvailableLoras(data);
             })
             .catch(err => console.error("Failed to load LoRAs", err));
+
+        // Get the definitive list from ComfyUI itself
+        fetch('/comfy-api/object_info/LoraLoaderModelOnly')
+            .then(res => res.json())
+            .then(data => {
+                const list = data?.LoraLoaderModelOnly?.input?.required?.lora_name?.[0];
+                if (list && Array.isArray(list)) {
+                    setComfyLoras(list);
+                    console.log("[DEBUG] ComfyUI Internals:", list);
+                }
+            })
+            .catch(() => { });
+    };
+
+    useEffect(() => {
+        fetchLoras();
     }, []);
+
+    useEffect(() => {
+        if (isLoraModalOpen) {
+            fetchLoras();
+        }
+    }, [isLoraModalOpen]);
 
     useEffect(() => {
         const stored = localStorage.getItem('global_prompt_library');
@@ -146,44 +170,112 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale, 
 
             {/* LoRA Selection Modal */}
             {isLoraModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsLoraModalOpen(false)}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => {
+                    setIsLoraModalOpen(false);
+                    setLoraSearch('');
+                }}>
                     <div className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-3xl p-6 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between">
-                            <h3 className="text-lg font-bold text-white">Select LoRA</h3>
-                            <button onClick={() => setIsLoraModalOpen(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                            <div className="flex flex-col">
+                                <h3 className="text-lg font-bold text-white">Select LoRA</h3>
+                                {comfyLoras.length > 0 && (
+                                    <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">
+                                        Synced with ComfyUI: {comfyLoras.length} items
+                                    </span>
+                                )}
+                            </div>
+                            <button onClick={() => {
+                                setIsLoraModalOpen(false);
+                                setLoraSearch('');
+                            }} className="p-2 hover:bg-white/10 rounded-full transition-colors">
                                 <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
                         </div>
-                        <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                            {availableLoras.length === 0 ? (
-                                <div className="text-center py-8 text-slate-500">No LoRAs found</div>
+
+                        <div className="relative">
+                            <input
+                                type="text"
+                                placeholder="Search LoRAs..."
+                                value={loraSearch}
+                                onChange={(e) => setLoraSearch(e.target.value)}
+                                autoFocus
+                                className="w-full bg-slate-950/50 border border-slate-700 rounded-xl p-3 pl-10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
+                            />
+                            <svg className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </div>
+
+                        <div className="max-h-[50vh] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                            {availableLoras.filter(l => l.toLowerCase().includes(loraSearch.toLowerCase())).length === 0 ? (
+                                <div className="text-center py-8 text-slate-500">No matching LoRAs found</div>
                             ) : (
-                                availableLoras.map((lora) => (
-                                    <button
-                                        key={lora}
-                                        onClick={() => {
-                                            const currentIdx = (params.loras || []).findIndex(l => l.name === lora);
-                                            if (currentIdx === -1) {
-                                                setParams(p => ({ ...p, loras: [...(p.loras || []), { name: lora, strength: 1.0 }] }));
-                                            }
-                                            setIsLoraModalOpen(false);
-                                        }}
-                                        className="w-full text-left p-3 rounded-xl bg-slate-800/50 hover:bg-purple-600/20 hover:border-purple-500/30 border border-transparent transition-all group"
-                                    >
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-sm font-medium text-slate-300 group-hover:text-purple-300 transition-colors truncate">
-                                                {lora.replace('.safetensors', '')}
-                                            </span>
-                                            {(params.loras || []).some(l => l.name === lora) && (
-                                                <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded uppercase font-bold">Applied</span>
-                                            )}
-                                        </div>
-                                    </button>
-                                ))
+                                availableLoras
+                                    .filter(l => l.toLowerCase().includes(loraSearch.toLowerCase()))
+                                    .map((lora) => (
+                                        <button
+                                            key={lora}
+                                            onClick={() => {
+                                                // SMART MATCH: Try to find this exact lora in ComfyUI's internal list
+                                                let targetName = lora;
+
+                                                // 1. Try normalizes slashes
+                                                const normalized = lora.replace(/\\/g, '/');
+                                                const backslashed = lora.replace(/\//g, '\\');
+
+                                                const match = comfyLoras.find(c =>
+                                                    c === normalized ||
+                                                    c === backslashed ||
+                                                    c === lora ||
+                                                    c.replace(/\\/g, '/') === normalized ||
+                                                    c.replace('.safetensors', '') === normalized.replace('.safetensors', '')
+                                                );
+
+                                                if (match) {
+                                                    console.log(`[LORAS] Smart matched "${lora}" to internal name: "${match}"`);
+                                                    targetName = match;
+                                                }
+
+                                                const currentIdx = (params.loras || []).findIndex(l => l.name === targetName);
+                                                if (currentIdx === -1) {
+                                                    setParams(p => ({ ...p, loras: [...(p.loras || []), { name: targetName, strength: 1.0 }] }));
+                                                }
+                                                setIsLoraModalOpen(false);
+                                                setLoraSearch('');
+                                            }}
+                                            className="w-full text-left p-3 rounded-xl bg-slate-800/50 hover:bg-purple-600/20 hover:border-purple-500/30 border border-transparent transition-all group"
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm font-medium text-slate-300 group-hover:text-purple-300 transition-colors truncate">
+                                                    {lora}
+                                                </span>
+                                                {(params.loras || []).some(l => l.name === lora) && (
+                                                    <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded uppercase font-bold">Applied</span>
+                                                )}
+                                            </div>
+                                        </button>
+                                    ))
                             )}
                         </div>
+                        {comfyLoras.length > 0 && (
+                            <div className="pt-2 border-t border-slate-800">
+                                <details className="group">
+                                    <summary className="text-[10px] font-bold text-slate-600 cursor-pointer hover:text-slate-400 transition-colors uppercase tracking-widest list-none flex items-center gap-2">
+                                        <svg className="w-3 h-3 group-open:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+                                        </svg>
+                                        Inspect ComfyUI Internal List
+                                    </summary>
+                                    <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[9px] font-mono text-slate-500 bg-black/30 p-3 rounded-xl max-h-32 overflow-y-auto custom-scrollbar">
+                                        {comfyLoras.sort().map((c, i) => (
+                                            <div key={i} className="truncate" title={c}>{c}</div>
+                                        ))}
+                                    </div>
+                                </details>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -389,7 +481,7 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale, 
                                             <div key={idx} className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 flex flex-col gap-2">
                                                 <div className="flex items-center justify-between">
                                                     <span className="text-xs font-bold text-slate-300 truncate max-w-[180px]" title={lora.name}>
-                                                        {lora.name.replace('.safetensors', '')}
+                                                        {lora.name}
                                                     </span>
                                                     <button
                                                         onClick={() => {
