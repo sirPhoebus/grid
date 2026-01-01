@@ -363,12 +363,23 @@ export const QwenPage: React.FC<QwenPageProps> = ({ initialData, onClearInitialD
                                         </span>
                                         <div className="flex gap-2">
                                             {mode === 'single' && (
-                                                <button
-                                                    onClick={() => setSingleImage(resultUrls.resultUrl)}
-                                                    className="px-4 py-2 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-400 hover:text-white rounded-full text-xs font-bold transition-all border border-emerald-600/50 flex items-center gap-2 shadow-lg"
-                                                >
-                                                    Use as Source
-                                                </button>
+                                                <>
+                                                    <button
+                                                        onClick={() => setSingleImage(resultUrls.resultUrl)}
+                                                        className="px-4 py-2 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-400 hover:text-white rounded-full text-xs font-bold transition-all border border-emerald-600/50 flex items-center gap-2 shadow-lg"
+                                                    >
+                                                        Use as Source
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setDoubleImages([resultUrls.resultUrl, doubleImages[1]]);
+                                                            setMode('double');
+                                                        }}
+                                                        className="px-4 py-2 bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white rounded-full text-xs font-bold transition-all border border-blue-600/50 flex items-center gap-2 shadow-lg"
+                                                    >
+                                                        Send to Double
+                                                    </button>
+                                                </>
                                             )}
                                             <button
                                                 onClick={() => onSendToUpscale?.(resultUrls.resultUrl, prompt)}
