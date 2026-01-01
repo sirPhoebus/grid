@@ -29,14 +29,21 @@ export default defineConfig(({ mode }) => {
           rewrite: (path) => path.replace(/^\/comfy-api/, ''),
           ws: true,
           configure: (proxy, _options) => {
+            proxy.on('error', (err, _req, _res) => {
+              console.error('proxy error', err);
+            });
             proxy.on('proxyReq', (proxyReq, req, _res) => {
+              // console.log('Sending Request to the Target:', req.method, req.url);
               proxyReq.setHeader('Origin', serverConfig.proxies.comfyUI.target);
             });
             proxy.on('proxyReqWs', (proxyReq, _req, _socket, _options, _head) => {
               proxyReq.setHeader('Origin', serverConfig.proxies.comfyUI.target);
             });
+            // proxy.on('proxyRes', (proxyRes, req, _res) => {
+            //   // console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+            // });
           },
-        }
+        },
       }
     },
     plugins: [

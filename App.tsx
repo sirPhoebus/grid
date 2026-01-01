@@ -13,12 +13,15 @@ import { ZImage } from './components/ZImage';
 import { FrameExtractor } from './components/FrameExtractor';
 import { VideoReverser } from './components/VideoReverser';
 import { Help } from './components/Help';
+import { QwenPage } from './components/QwenPage';
+
 
 // Components
 const Header: React.FC<{
   onOpenSettings: () => void;
-  currentView: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor' | 'reverse' | 'help';
-  onNavigate: (view: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor' | 'reverse' | 'help') => void;
+  currentView: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit';
+  onNavigate: (view: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit') => void;
+
 }> = ({ onOpenSettings, currentView, onNavigate }) => (
   <header className="py-6 px-6 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
     <div className="max-w-6xl mx-auto flex items-center justify-between">
@@ -47,6 +50,16 @@ const Header: React.FC<{
         >
           Z-Image
         </button>
+        <button
+          onClick={() => onNavigate('qwen-edit')}
+          className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'qwen-edit'
+            ? 'bg-cyan-600 text-white shadow-lg'
+            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+            }`}
+        >
+          Qwen Pro
+        </button>
+
         <button
           onClick={() => onNavigate('upscale')}
           className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'upscale'
@@ -936,7 +949,10 @@ const App: React.FC = () => {
           />
         ) : currentView === 'help' ? (
           <Help />
+        ) : currentView === 'qwen-edit' ? (
+          <QwenPage />
         ) : currentView === 'gallery' ? (
+
           <Gallery
             onSendToTurbo={(data) => {
               setTurboHandover(data);

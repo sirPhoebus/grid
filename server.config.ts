@@ -33,7 +33,7 @@ export const serverConfig = {
         mediaDir: 'media',
 
         // Media subdirectories
-        mediaTypes: ['sliced_img', 'upscale', 'individual_upscale', 'turbowan', 'stitched', 'z_image', 'inverse'],
+        mediaTypes: ['sliced_img', 'upscale', 'individual_upscale', 'turbowan', 'stitched', 'z_image', 'inverse', 'qwen_gallery'],
     },
 
     // File Settings
