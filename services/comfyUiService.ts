@@ -175,14 +175,24 @@ export class ComfyUiService {
         });
         const { path: localVideoPath } = await saveRes.json();
 
-        const previewNodeId = workflowType === 'turbowan' ? '8' : '193:162';
-        const previewOutput = outputs[previewNodeId];
-        if (!previewOutput || !previewOutput.images || previewOutput.images.length === 0) {
-            throw new Error(`No preview images found (Node ${previewNodeId})`);
+        let lastFrameUrl = '';
+        if (workflowType === 'turbowan') {
+            const previewOutput = outputs['8'];
+            if (!previewOutput || !previewOutput.images || previewOutput.images.length === 0) {
+                throw new Error("No preview images found (Node 8)");
+            }
+            const lastImageInfo = previewOutput.images[previewOutput.images.length - 1];
+            lastFrameUrl = await this.getImage(lastImageInfo.filename, lastImageInfo.subfolder, lastImageInfo.type);
+        } else {
+            // For Qwen, extract from the saved video via ffmpeg endpoint
+            const res = await fetch('/extract-last-frame', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ videoPath: localVideoPath })
+            });
+            const { base64 } = await res.json();
+            lastFrameUrl = base64;
         }
-
-        const lastImageInfo = previewOutput.images[previewOutput.images.length - 1];
-        const lastFrameUrl = await this.getImage(lastImageInfo.filename, lastImageInfo.subfolder, lastImageInfo.type);
 
         return { videoUrl, lastFrameUrl, localVideoPath };
     }
