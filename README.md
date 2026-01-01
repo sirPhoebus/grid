@@ -35,6 +35,12 @@ Powered by **Gemini**, **ComfyUI**, **Veo 3.1**, and **Kling AI**, Alcove Pro is
 - **Video Reverser**: Reverse video and audio streams
 - **Frame Extraction**: Extract the last frame from videos for reuse
 
+### 🪄 **Qwen Edit Pro**
+- **Single Image Mode**: Professional AI image editing with a single reference image (1536px high-fidelity)
+- **Triple Image Mode**: Complex image composition using three source images and a prompt
+- **Side-by-Side Comparison**: Automatic generation of comparison views for triple composition
+- **Unified Backend**: Integrated directly into your local ComfyUI instance via `/comfy-api`
+
 ### 🖼️ **Unified Gallery**
 - Centralized media browser for all generated content
 - Categories: Sliced Images, Upscaled, TurboWan, Stitched, Z-Images, Reversed Videos
@@ -134,6 +140,12 @@ Configure in Settings → Video Generation Method
 - **Automated Workflows**: Auto-stitch after iterative TurboWan generations
 - **Reverse Videos**: Reverse both video and audio streams
 
+### Qwen Edit Pro
+- **Mode Switching**: Toggle between "Single Image" and "Triple Image" modes
+- **High Fidelity**: Single-image mode utilizes a 1536px longest-edge scaling for maximum quality
+- **Refined Composition**: Triple-image mode handles complex background removals and reconstructions
+- **Artifact Management**: Save results directly to a dedicated `qwen_gallery`
+
 ---
 
 ## 📁 Project Structure
@@ -147,9 +159,11 @@ grid/
 │   ├── VideoReverser.tsx   # Video reversal
 │   ├── FrameExtractor.tsx  # Frame extraction
 │   ├── Gallery.tsx         # Media browser
+│   ├── Help.tsx            # Integrated manual and guides
+│   ├── QwenPage.tsx        # Qwen Pro image editing
 │   └── PromptLibrary.tsx   # Prompt management
 ├── services/
-│   └── comfyUiService.ts   # ComfyUI workflow manager
+│   └── comfyUiService.ts   # Unified ComfyUI & Qwen workflow manager
 ├── media/                  # Generated content storage
 │   ├── sliced_img/
 │   ├── upscale/
@@ -157,7 +171,8 @@ grid/
 │   ├── turbowan/
 │   ├── stitched/
 │   ├── z_image/
-│   └── inverse/
+│   ├── inverse/
+│   └── qwen_gallery/
 └── vite.config.ts          # Backend middleware
 ```
 
@@ -185,6 +200,7 @@ The Vite dev server includes custom middleware for file operations:
 3. **LoRA Chaining**: Order matters! LoRAs are applied sequentially in the order you add them
 4. **Iterative Generation**: Use TurboWan's iteration feature to create animation sequences automatically
 5. **Frame Recycling**: Extract the last frame from any video and send it back to TurboWan for continuation
+6. **Qwen Comparison**: Use "Triple Image" mode in Qwen Pro to see exactly how your AI edits compare to the originals in a side-by-side view
 
 ---
 
@@ -206,7 +222,13 @@ The Vite dev server includes custom middleware for file operations:
 
 ## 📜 Version History
 
-### v1.4 (Latest)
+### v1.5 (Latest)
+- **Qwen Edit Pro**: New professional image editing suite with Single and Triple image modes
+- **Unified Backend**: All ComfyUI and Qwen workflows now routed through a single `/comfy-api` proxy
+- **Premium UI**: Responsive sub-navigation and zero-dependency inline SVGs for Qwen Pro
+- **Media Expansion**: Support for `qwen_gallery` in the system configuration
+
+### v1.4
 - **Z-Image Persistence**: Settings and results saved across sessions
 - **Model Selection**: Switch between multiple UNET models
 - **LoRA Chaining**: Support for multiple LoRAs with strength controls
