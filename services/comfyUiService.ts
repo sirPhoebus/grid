@@ -11,6 +11,7 @@ export interface ZImageParams {
     scheduler: 'beta' | 'simple';
     depth_image?: string; // Optional depth image (base64 or blob URL)
     depth_strength?: number; // Strength of the depth control
+    engine?: 'z-image' | 'qwen';
 }
 
 export class ComfyUiService {
@@ -416,15 +417,127 @@ export class ComfyUiService {
         return nodes;
     }
 
+    static getQwenImageWorkflow(params: ZImageParams) {
+        return {
+            "3": {
+                "inputs": {
+                    "seed": Math.floor(Math.random() * 1000000000000000),
+                    "steps": params.steps || 6,
+                    "cfg": params.cfg || 1,
+                    "sampler_name": "euler",
+                    "scheduler": "beta",
+                    "denoise": 1,
+                    "model": ["66", 0],
+                    "positive": ["6", 0],
+                    "negative": ["7", 0],
+                    "latent_image": ["58", 0]
+                },
+                "class_type": "KSampler",
+                "_meta": { "title": "KSampler" }
+            },
+            "6": {
+                "inputs": {
+                    "text": params.prompt,
+                    "clip": ["38", 0]
+                },
+                "class_type": "CLIPTextEncode",
+                "_meta": { "title": "CLIP Text Encode (Positive Prompt)" }
+            },
+            "7": {
+                "inputs": {
+                    "text": params.negative_prompt || "",
+                    "clip": ["38", 0]
+                },
+                "class_type": "CLIPTextEncode",
+                "_meta": { "title": "CLIP Text Encode (Negative Prompt)" }
+            },
+            "8": {
+                "inputs": {
+                    "samples": ["3", 0],
+                    "vae": ["39", 0]
+                },
+                "class_type": "VAEDecode",
+                "_meta": { "title": "VAE Decode" }
+            },
+            "37": {
+                "inputs": {
+                    "unet_name": "qwen_image_2512_fp8_e4m3fn.safetensors",
+                    "weight_dtype": "fp8_e4m3fn"
+                },
+                "class_type": "UNETLoader",
+                "_meta": { "title": "Load Diffusion Model" }
+            },
+            "38": {
+                "inputs": {
+                    "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+                    "type": "qwen_image",
+                    "device": "default"
+                },
+                "class_type": "CLIPLoader",
+                "_meta": { "title": "Load CLIP" }
+            },
+            "39": {
+                "inputs": {
+                    "vae_name": "qwen_image_vae.safetensors"
+                },
+                "class_type": "VAELoader",
+                "_meta": { "title": "Load VAE" }
+            },
+            "58": {
+                "inputs": {
+                    "width": params.width,
+                    "height": params.height,
+                    "batch_size": 1
+                },
+                "class_type": "EmptySD3LatentImage",
+                "_meta": { "title": "EmptySD3LatentImage" }
+            },
+            "60": {
+                "inputs": {
+                    "filename_prefix": "QwenImage",
+                    "images": ["8", 0]
+                },
+                "class_type": "SaveImage",
+                "_meta": { "title": "Save Image" }
+            },
+            "66": {
+                "inputs": {
+                    "shift": 3.1,
+                    "model": ["75", 0]
+                },
+                "class_type": "ModelSamplingAuraFlow",
+                "_meta": { "title": "ModelSamplingAuraFlow" }
+            },
+            "75": {
+                "inputs": {
+                    "lora_name": "Qwen-Image-2512-Lightning-4steps-V1.0-fp32.safetensors",
+                    "strength_model": 1,
+                    "model": ["37", 0]
+                },
+                "class_type": "LoraLoaderModelOnly",
+                "_meta": { "title": "LoraLoaderModelOnly" }
+            }
+        };
+    }
+
     static async runZImageWorkflow(params: ZImageParams): Promise<{ imageUrl: string }> {
         let workflow: any;
-        if (params.depth_image) {
-            const depthImageFilename = await this.uploadImage(params.depth_image);
-            workflow = this.getZImageDepthWorkflow(params, depthImageFilename);
+        const engine = params.engine || 'z-image';
+
+        if (engine === 'qwen') {
+            workflow = this.getQwenImageWorkflow(params);
         } else {
-            workflow = this.getZImageWorkflow(params);
+            if (params.depth_image) {
+                const depthImageFilename = await this.uploadImage(params.depth_image);
+                workflow = this.getZImageDepthWorkflow(params, depthImageFilename);
+            } else {
+                workflow = this.getZImageWorkflow(params);
+            }
         }
+
         const clientId = 'zimage-' + Math.random().toString(36).substring(7);
+        const saveNodeId = engine === 'qwen' ? '60' : '9';
+
         return new Promise((resolve, reject) => {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const host = window.location.host;
@@ -437,7 +550,7 @@ export class ComfyUiService {
             };
             ws.onmessage = async (event) => {
                 const message = JSON.parse(event.data);
-                if (message.type === 'executed' && message.data.node === '9') {
+                if (message.type === 'executed' && message.data.node === saveNodeId) {
                     const output = message.data.output;
                     if (output && output.images) {
                         const image = output.images[0];

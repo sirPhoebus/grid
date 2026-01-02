@@ -19,19 +19,20 @@ export const Help: React.FC = () => {
                 </div>
             </section>
 
-            {/* Z-Image Generator */}
+            {/* Image Generator */}
             <section className="space-y-6">
-                <h2 className="text-3xl font-bold text-white border-b border-slate-700 pb-3">🎨 Z-Image Generator</h2>
+                <h2 className="text-3xl font-bold text-white border-b border-slate-700 pb-3">🎨 Image Generator</h2>
 
                 <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 space-y-4">
                     <h3 className="text-xl font-bold text-purple-400">Creating AI Images</h3>
-                    <p className="text-slate-300">Generate high-quality images using ComfyUI workflows with full control over models, LoRAs, and parameters.</p>
-                    <img src="/help/z-image.png" alt="Z-Image Interface" className="rounded-xl border border-slate-700 shadow-2xl" />
+                    <p className="text-slate-300">Generate high-quality images using Z-Image or the lightning-fast Qwen-Image engine with full control over parameters.</p>
+                    <img src="/help/z-image.png" alt="Image Generator Interface" className="rounded-xl border border-slate-700 shadow-2xl" />
 
                     <div className="bg-slate-950/50 p-4 rounded-xl space-y-3">
                         <h4 className="font-bold text-white">Key Features:</h4>
                         <ul className="space-y-2 text-slate-300 list-disc list-inside">
-                            <li><strong>Model Selection:</strong> Choose between Z-Image Turbo and Nova Reality v1.5</li>
+                            <li><strong>Engine Support:</strong> Toggle between Lumina2 (Z-Image) and Qwen-Image</li>
+                            <li><strong>Qwen Lightning:</strong> Ultra-fast 6-step generations using specialized LoRAs</li>
                             <li><strong>LoRA Support:</strong> Chain multiple LoRAs with individual strength controls (0.0-2.0)</li>
                             <li><strong>Advanced Controls:</strong> Adjust steps, CFG, sampler, scheduler, and negative prompts</li>
                             <li><strong>Dimension Presets:</strong> Quick swap between portrait/landscape with one click</li>

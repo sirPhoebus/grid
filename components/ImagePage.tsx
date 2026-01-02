@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { ComfyUiService, ZImageParams } from '../services/comfyUiService';
 import { PromptLibrary, addPromptToLibrary } from './PromptLibrary';
 
-interface ZImageProps {
+interface ImageProps {
     onSendToTurbo?: (data: { imageUrl: string, prompt: string }) => void;
     onSendToUpscale?: (imageUrl: string, prompt: string) => void;
     onSendToQwen?: (data: { imageUrl: string, prompt: string }) => void;
     onPreviewImage?: (url: string) => void;
 }
 
-export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale, onSendToQwen, onPreviewImage }) => {
+export const Image: React.FC<ImageProps> = ({ onSendToTurbo, onSendToUpscale, onSendToQwen, onPreviewImage }) => {
     const [params, setParams] = useState<ZImageParams>(() => {
         const saved = localStorage.getItem('zimage_params');
         if (saved) {
@@ -29,7 +29,8 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale, 
             unet_model: "zImage_turbo.safetensors",
             sampler_name: 'res_multistep',
             scheduler: 'simple',
-            depth_strength: 1.0
+            depth_strength: 1.0,
+            engine: 'z-image'
         };
     });
 
@@ -308,9 +309,22 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale, 
                 <div className="flex items-center justify-between">
                     <div>
                         <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-                            Z-Image Generator
+                            Image Generator
                         </h2>
-                        <p className="text-slate-400 mt-1">Lumina2 Turbo Inference</p>
+                        <div className="flex gap-2 mt-2">
+                            <button
+                                onClick={() => setParams(prev => ({ ...prev, engine: 'z-image' }))}
+                                className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${params.engine === 'z-image' || !params.engine ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20' : 'bg-slate-800 text-slate-500 hover:text-slate-300'}`}
+                            >
+                                Z-Image
+                            </button>
+                            <button
+                                onClick={() => setParams(prev => ({ ...prev, engine: 'qwen', steps: 6 }))}
+                                className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${params.engine === 'qwen' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-slate-800 text-slate-500 hover:text-slate-300'}`}
+                            >
+                                Qwen-Image
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -628,55 +642,60 @@ export const ZImage: React.FC<ZImageProps> = ({ onSendToTurbo, onSendToUpscale, 
                                 </div>
                             </div>
 
-                            {/* Negative Prompt */}
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Negative Prompt</label>
-                                <textarea
-                                    value={params.negative_prompt || ''}
-                                    onChange={(e) => setParams({ ...params, negative_prompt: e.target.value })}
-                                    className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-red-500/50 transition-all resize-none h-20"
-                                    placeholder="What to avoid..."
-                                />
-                            </div>
 
-                            {/* Model Selection */}
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">UNET Model</label>
-                                <select
-                                    value={params.unet_model || "zImage_turbo.safetensors"}
-                                    onChange={(e) => setParams({ ...params, unet_model: e.target.value })}
-                                    className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500 appearance-none"
-                                >
-                                    <option value="zImage_turbo.safetensors">Z-Image Turbo</option>
-                                    <option value="novaRealityZI_v15Turbo.safetensors">Nova Reality v1.5 Turbo</option>
-                                </select>
-                            </div>
+                            {params.engine !== 'qwen' && (
+                                <div className="space-y-4">
+                                    {/* Negative Prompt */}
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Negative Prompt</label>
+                                        <textarea
+                                            value={params.negative_prompt || ''}
+                                            onChange={(e) => setParams({ ...params, negative_prompt: e.target.value })}
+                                            className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-red-500/50 transition-all resize-none h-20"
+                                            placeholder="What to avoid..."
+                                        />
+                                    </div>
 
-                            {/* Sampler & Scheduler */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Sampler</label>
-                                    <select
-                                        value={params.sampler_name}
-                                        onChange={(e) => setParams({ ...params, sampler_name: e.target.value as any })}
-                                        className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500 appearance-none"
-                                    >
-                                        <option value="euler">Euler</option>
-                                        <option value="res_multistep">Res Multistep</option>
-                                    </select>
+                                    {/* Model Selection */}
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">UNET Model</label>
+                                        <select
+                                            value={params.unet_model || "zImage_turbo.safetensors"}
+                                            onChange={(e) => setParams({ ...params, unet_model: e.target.value })}
+                                            className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500 appearance-none"
+                                        >
+                                            <option value="zImage_turbo.safetensors">Z-Image Turbo</option>
+                                            <option value="novaRealityZI_v15Turbo.safetensors">Nova Reality v1.5 Turbo</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Sampler & Scheduler */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Sampler</label>
+                                            <select
+                                                value={params.sampler_name}
+                                                onChange={(e) => setParams({ ...params, sampler_name: e.target.value as any })}
+                                                className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500 appearance-none"
+                                            >
+                                                <option value="euler">Euler</option>
+                                                <option value="res_multistep">Res Multistep</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Scheduler</label>
+                                            <select
+                                                value={params.scheduler}
+                                                onChange={(e) => setParams({ ...params, scheduler: e.target.value as any })}
+                                                className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500 appearance-none"
+                                            >
+                                                <option value="beta">Beta</option>
+                                                <option value="simple">Simple</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Scheduler</label>
-                                    <select
-                                        value={params.scheduler}
-                                        onChange={(e) => setParams({ ...params, scheduler: e.target.value as any })}
-                                        className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500 appearance-none"
-                                    >
-                                        <option value="beta">Beta</option>
-                                        <option value="simple">Simple</option>
-                                    </select>
-                                </div>
-                            </div>
+                            )}
 
                         </div>
                     </div>

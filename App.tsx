@@ -9,7 +9,7 @@ import { ProcessingStep, Frame, VideoTransition, AppState } from './types';
 import { Gallery } from './components/Gallery';
 import { TurboWan } from './components/TurboWan';
 import { VideoStitcher } from './components/VideoStitcher';
-import { ZImage } from './components/ZImage';
+import { Image } from './components/ImagePage';
 import { FrameExtractor } from './components/FrameExtractor';
 import { VideoReverser } from './components/VideoReverser';
 import { Help } from './components/Help';
@@ -19,8 +19,8 @@ import { QwenPage } from './components/QwenPage';
 // Components
 const Header: React.FC<{
   onOpenSettings: () => void;
-  currentView: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit';
-  onNavigate: (view: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit') => void;
+  currentView: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit';
+  onNavigate: (view: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit') => void;
 
 }> = ({ onOpenSettings, currentView, onNavigate }) => (
   <header className="py-6 px-6 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
@@ -42,13 +42,13 @@ const Header: React.FC<{
 
       <nav className="flex items-center bg-slate-800/50 rounded-full p-1 border border-slate-700/50 absolute left-1/2 -translate-x-1/2 top-24 md:top-auto md:relative md:left-auto md:translate-x-0">
         <button
-          onClick={() => onNavigate('z-image')}
-          className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'z-image'
+          onClick={() => onNavigate('image')}
+          className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'image'
             ? 'bg-cyan-600 text-white shadow-lg'
             : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
             }`}
         >
-          Z-Image
+          Image
         </button>
         <button
           onClick={() => onNavigate('qwen-edit')}
@@ -929,8 +929,8 @@ const App: React.FC = () => {
           <VideoStitcher onNavigateToGallery={() => setCurrentView('gallery')} />
         ) : currentView === 'reverse' ? (
           <VideoReverser />
-        ) : currentView === 'z-image' ? (
-          <ZImage
+        ) : currentView === 'image' ? (
+          <Image
             onSendToTurbo={(data) => {
               setTurboHandover(data);
               setCurrentView('turbo-wan');
