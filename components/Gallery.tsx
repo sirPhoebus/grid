@@ -20,7 +20,7 @@ interface MediaData {
 interface GalleryProps {
     onSendToTurbo?: (data: { imageUrl: string, prompt: string }) => void;
     onSendToUpscale?: (imageUrl: string, prompt: string) => void;
-    onSendToQwen?: (data: { imageUrl: string, prompt: string }) => void;
+    onSendToQwen?: (data: { imageUrl: string, prompt: string, targetMode?: 'single' | 'double' | 'triple' }) => void;
 }
 
 export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale, onSendToQwen }) => {

@@ -39,7 +39,7 @@ const XMarkIcon = ({ className }: { className?: string }) => (
 );
 
 interface QwenPageProps {
-    initialData?: { imageUrl: string, prompt: string } | null;
+    initialData?: { imageUrl: string, prompt: string, targetMode?: 'single' | 'double' | 'triple' } | null;
     onClearInitialData?: () => void;
     onPreviewImage?: (url: string) => void;
     onSendToTurbo?: (data: { imageUrl: string, prompt: string }) => void;
@@ -55,9 +55,18 @@ export const QwenPage: React.FC<QwenPageProps> = ({ initialData, onClearInitialD
 
     React.useEffect(() => {
         if (initialData) {
-            setSingleImage(initialData.imageUrl);
+            const targetMode = initialData.targetMode || 'single';
+            setMode(targetMode);
             setPrompt(initialData.prompt);
-            setMode('single');
+
+            if (targetMode === 'double') {
+                setDoubleImages([initialData.imageUrl, null]);
+            } else if (targetMode === 'triple') {
+                setImages([initialData.imageUrl, null, null]);
+            } else {
+                setSingleImage(initialData.imageUrl);
+            }
+
             onClearInitialData?.();
         }
     }, [initialData, onClearInitialData]);

@@ -5,7 +5,7 @@ import { PromptLibrary, addPromptToLibrary } from './PromptLibrary';
 interface ImageProps {
     onSendToTurbo?: (data: { imageUrl: string, prompt: string }) => void;
     onSendToUpscale?: (imageUrl: string, prompt: string) => void;
-    onSendToQwen?: (data: { imageUrl: string, prompt: string }) => void;
+    onSendToQwen?: (data: { imageUrl: string, prompt: string, targetMode?: 'single' | 'double' | 'triple' }) => void;
     onPreviewImage?: (url: string) => void;
 }
 
@@ -759,15 +759,28 @@ export const Image: React.FC<ImageProps> = ({ onSendToTurbo, onSendToUpscale, on
                                     Use as Reference
                                 </button>
                                 {onSendToQwen && (
-                                    <button
-                                        onClick={() => onSendToQwen({ imageUrl: resultImageUrl, prompt: params.prompt })}
-                                        className="flex items-center gap-3 px-8 py-4 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs uppercase tracking-[0.2em] rounded-2xl shadow-xl shadow-emerald-700/20 transition-all active:scale-95 group/qwen border border-white/10"
-                                    >
-                                        <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                        </svg>
-                                        Edit with Qwen
-                                    </button>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => onSendToQwen({ imageUrl: resultImageUrl, prompt: params.prompt })}
+                                            className="flex items-center gap-3 px-8 py-4 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs uppercase tracking-[0.2em] rounded-2xl shadow-xl shadow-emerald-700/20 transition-all active:scale-95 group/qwen border border-white/10"
+                                            title="Edit with Qwen (Single)"
+                                        >
+                                            <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                            Edit with Qwen
+                                        </button>
+                                        <button
+                                            onClick={() => onSendToQwen({ imageUrl: resultImageUrl, prompt: params.prompt, targetMode: 'double' })}
+                                            className="flex items-center gap-3 px-6 py-4 bg-indigo-700 hover:bg-indigo-600 text-white font-black text-xs uppercase tracking-[0.2em] rounded-2xl shadow-xl shadow-indigo-700/20 transition-all active:scale-95 group/qwen-double border border-white/10"
+                                            title="Send to Double Sub Page"
+                                        >
+                                            <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                                            </svg>
+                                            Qwen Double
+                                        </button>
+                                    </div>
                                 )}
                                 {onSendToTurbo && (
                                     <button

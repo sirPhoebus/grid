@@ -201,7 +201,7 @@ const MediaOverlay: React.FC<{ media: OverlayMedia; onClose: () => void }> = ({ 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit'>('z-image');
   const [turboHandover, setTurboHandover] = useState<{ imageUrl: string, prompt: string } | null>(null);
-  const [qwenHandover, setQwenHandover] = useState<{ imageUrl: string, prompt: string } | null>(null);
+  const [qwenHandover, setQwenHandover] = useState<{ imageUrl: string, prompt: string, targetMode?: 'single' | 'double' | 'triple' } | null>(null);
   const [hasKey, setHasKey] = useState<boolean>(false);
   const [individualState, setIndividualState] = useState<{
     file: File | null;
