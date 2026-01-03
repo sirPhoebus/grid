@@ -144,16 +144,24 @@ export class ComfyUiService {
     private static async getHistory(prompt_id: string, isQwen: boolean = false): Promise<any> {
         const response = await fetch(`${this.API_BASE_URL}/history/${prompt_id}`);
         if (!response.ok) throw new Error("Failed to get history");
-        const data = await response.json();
+        return await response.json();
+    }
 
-        // Clean up history on the server to prevent memory build-up
+    /**
+     * Clean up history on the server to prevent memory build-up.
+     * Uses correct ComfyUI POST /history API.
+     */
+    public static async clearHistory(prompt_id: string): Promise<void> {
         try {
-            await fetch(`${this.API_BASE_URL}/history/${prompt_id}`, { method: 'DELETE' });
+            await fetch(`${this.API_BASE_URL}/history`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ delete: [prompt_id] })
+            });
+            console.log(`[COMFY] History cleared for ${prompt_id}`);
         } catch (e) {
-            console.warn("Failed to delete history", e);
+            console.warn("Failed to clear history", e);
         }
-
-        return data;
     }
 
     /**
@@ -179,6 +187,7 @@ export class ComfyUiService {
         const { prompt_id } = await this.queuePrompt(workflow);
         await this.waitForExecution(prompt_id);
         const history = await this.getHistory(prompt_id, true);
+        await this.clearHistory(prompt_id);
         const outputs = history[prompt_id].outputs;
         const resultOutput = outputs['105'];
         const resultUrl = resultOutput?.images?.[0] ? this.getImage(resultOutput.images[0].filename, resultOutput.images[0].subfolder, resultOutput.images[0].type, true) : "";
@@ -193,6 +202,7 @@ export class ComfyUiService {
         const { prompt_id } = await this.queuePrompt(workflow);
         await this.waitForExecution(prompt_id);
         const history = await this.getHistory(prompt_id, true);
+        await this.clearHistory(prompt_id);
         const outputs = history[prompt_id].outputs;
         const resultOutput = outputs['105'];
         const resultUrl = resultOutput?.images?.[0] ? this.getImage(resultOutput.images[0].filename, resultOutput.images[0].subfolder, resultOutput.images[0].type, true) : "";
@@ -207,6 +217,7 @@ export class ComfyUiService {
         const { prompt_id } = await this.queuePrompt(workflow);
         await this.waitForExecution(prompt_id);
         const history = await this.getHistory(prompt_id, true);
+        await this.clearHistory(prompt_id);
         const outputs = history[prompt_id].outputs;
         const resultOutput = outputs['105'];
         const resultUrl = resultOutput?.images?.[0] ? this.getImage(resultOutput.images[0].filename, resultOutput.images[0].subfolder, resultOutput.images[0].type, true) : "";
@@ -219,23 +230,26 @@ export class ComfyUiService {
             ? this.getTurboWanWorkflow(filename, promptText, aspectRatio)
             : this.getQwenVideoWorkflow(filename, promptText, aspectRatio);
 
-        const { exec } = await import('child_process');
-        const { promisify } = await import('util');
-        const execPromise = promisify(exec);
-
         const { prompt_id } = await this.queuePrompt(prompt);
         await this.waitForExecution(prompt_id);
         const history = await this.getHistory(prompt_id);
+        await this.clearHistory(prompt_id);
         const outputs = history[prompt_id].outputs;
 
         const outputNodeId = workflowType === 'turbowan' ? '9' : '204';
         const videoCombineOutput = outputs[outputNodeId];
 
-        if (!videoCombineOutput || (!videoCombineOutput.gifs && !videoCombineOutput.images) || (videoCombineOutput.gifs && videoCombineOutput.gifs.length === 0)) {
-            throw new Error(`No output video found (Node ${outputNodeId})`);
+        if (!videoCombineOutput) {
+            const availableNodes = Object.keys(outputs).join(', ');
+            throw new Error(`Node ${outputNodeId} missing from outputs. Available: ${availableNodes}`);
         }
 
-        const videoInfo = videoCombineOutput.gifs ? videoCombineOutput.gifs[0] : videoCombineOutput.images[0];
+        const videoInfo = videoCombineOutput.gifs?.[0] || videoCombineOutput.images?.[0] || videoCombineOutput.video?.[0];
+
+        if (!videoInfo) {
+            throw new Error(`Node ${outputNodeId} executed but yielded no file info. Keys: ${Object.keys(videoCombineOutput).join(', ')}`);
+        }
+
         const videoUrl = `${this.API_BASE_URL}/view?filename=${videoInfo.filename}&subfolder=${videoInfo.subfolder}&type=${videoInfo.type}`;
 
         const saveRes = await fetch('/save-video', {
@@ -412,7 +426,7 @@ export class ComfyUiService {
             "6": { "inputs": { "image": inputFilename }, "class_type": "LoadImage", "_meta": { "title": "Load Image" } },
             "7": { "inputs": { "num_frames": 137, "num_steps": 4, "resolution": "480", "aspect_ratio": aspectRatio, "boundary": 0.9, "sigma_max": 200, "seed": Math.floor(Math.random() * 1000000), "use_ode": false, "low_vram": false, "width": width, "height": height, "high_noise_model": ["1", 0], "low_noise_model": ["2", 0], "conditioning": ["4", 0], "vae": ["5", 0], "image": ["6", 0] }, "class_type": "TurboDiffusionI2VSampler", "_meta": { "title": "Sampler" } },
             "8": { "inputs": { "images": ["7", 0] }, "class_type": "PreviewImage", "_meta": { "title": "Preview" } },
-            "9": { "inputs": { "frame_rate": 25, "loop_count": 0, "filename_prefix": "AnimateDiff", "format": "video/h264-mp4", "pix_fmt": "yuv420p", "crf": 19, "images": ["7", 0] }, "class_type": "VHS_VideoCombine", "_meta": { "title": "Video Combine" } }
+            "9": { "inputs": { "frame_rate": 25, "loop_count": 0, "filename_prefix": "AnimateDiff", "format": "video/h264-mp4", "pix_fmt": "yuv420p", "crf": 19, "save_output": true, "pingpong": false, "images": ["7", 0] }, "class_type": "VHS_VideoCombine", "_meta": { "title": "Video Combine" } }
         };
     }
 

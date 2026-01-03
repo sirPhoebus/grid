@@ -16,13 +16,14 @@ import { Help } from './components/Help';
 import { QwenPage } from './components/QwenPage';
 import { PromptPage } from './components/PromptPage';
 import { BatchPage } from './components/BatchPage';
+import { DirectorPage } from './components/DirectorPage';
 
 
 // Components
 const Header: React.FC<{
   onOpenSettings: () => void;
-  currentView: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit' | 'prompt-view' | 'batch-edit';
-  onNavigate: (view: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit' | 'prompt-view' | 'batch-edit') => void;
+  currentView: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit' | 'prompt-view' | 'batch-edit' | 'director';
+  onNavigate: (view: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit' | 'prompt-view' | 'batch-edit' | 'director') => void;
 
 }> = ({ onOpenSettings, currentView, onNavigate }) => (
   <header className="py-6 px-6 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
@@ -90,6 +91,15 @@ const Header: React.FC<{
             }`}
         >
           Video
+        </button>
+        <button
+          onClick={() => onNavigate('director')}
+          className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'director'
+            ? 'bg-rose-600 text-white shadow-lg'
+            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+            }`}
+        >
+          Director
         </button>
         <button
           onClick={() => onNavigate('home')}
@@ -212,7 +222,7 @@ const MediaOverlay: React.FC<{ media: OverlayMedia; onClose: () => void }> = ({ 
 };
 
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit' | 'prompt-view' | 'batch-edit'>('z-image');
+  const [currentView, setCurrentView] = useState<'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit' | 'prompt-view' | 'batch-edit' | 'director'>('z-image');
   const [turboHandover, setTurboHandover] = useState<{ imageUrl: string, prompt: string } | null>(null);
   const [qwenHandover, setQwenHandover] = useState<{ imageUrl: string, prompt: string, targetMode?: 'single' | 'double' | 'triple' } | null>(null);
   const [promptHandover, setPromptHandover] = useState<{ imageUrl: string, prompt: string, metadata?: any } | null>(null);
@@ -1025,6 +1035,11 @@ const App: React.FC = () => {
               });
               setCurrentView('upscale');
             }}
+          />
+        ) : currentView === 'director' ? (
+          <DirectorPage
+            onPreview={(url) => setOverlayMedia({ url, type: url.includes('.mp4') ? 'video' : 'image' })}
+            onVideoGenerated={(url) => setOverlayMedia({ url, type: 'video' })}
           />
         ) : currentView === 'gallery' ? (
 

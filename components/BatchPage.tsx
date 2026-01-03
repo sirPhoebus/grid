@@ -127,44 +127,39 @@ export const BatchPage: React.FC<BatchPageProps> = ({ onPreviewImage, onSendToTu
         setIsGenerating(true);
         console.log(`[BATCH] Starting batch.`);
 
-        // Recursive processor to handle the queue one by one
-        const processNext = async () => {
-            // Get the latest items state using functional update trick or we can just use the prop if we were in a sub-effect, 
-            // but here we'll just find the next one from the current items array and continue.
-            // Since this is a single execution flow, we can just iterate.
+        // Continuous processor that checks itemsRef for new pending work
+        while (true) {
+            // Find first item that needs processing (pending or error)
+            const nextItemIndex = itemsRef.current.findIndex(it => it.status === 'pending' || it.status === 'error');
 
-            for (let i = 0; i < items.length; i++) {
-                // We fetch the latest item state from a closure-safe way if possible, 
-                // but for a simple loop, let's just use what we have and check if it still exists in the state.
-                const currentItem = items[i];
-                if (currentItem.status === 'completed') continue;
-
-                setCurrentIndex(i);
-
-                // Update UI to processing
-                setItems(prev => prev.map(it => it.id === currentItem.id ? { ...it, status: 'processing' } : it));
-
-                try {
-                    const result = await ComfyUiService.runQwenSingleEditWorkflow(currentItem.sourceImage, prompt);
-
-                    setItems(prev => {
-                        const exists = prev.find(it => it.id === currentItem.id);
-                        if (!exists) return prev;
-                        return prev.map(it => it.id === currentItem.id ? { ...it, status: 'completed', resultImage: result.resultUrl } : it);
-                    });
-
-                    await handleSaveToGallery(result.resultUrl, 'batch_qwen');
-                } catch (err: any) {
-                    console.error("[BATCH] Error:", err);
-                    setItems(prev => prev.map(it => it.id === currentItem.id ? { ...it, status: 'error', error: err.message || 'Failed' } : it));
-                } finally {
-                    // Force a memory cleanup on the server after each item (success or failure)
-                    await ComfyUiService.freeMemory();
-                }
+            if (nextItemIndex === -1) {
+                console.log("[BATCH] No more pending items found.");
+                break;
             }
-        };
 
-        await processNext();
+            const currentItem = itemsRef.current[nextItemIndex];
+            setCurrentIndex(nextItemIndex);
+
+            // Update UI to processing
+            setItems(prev => prev.map(it => it.id === currentItem.id ? { ...it, status: 'processing' } : it));
+
+            try {
+                const result = await ComfyUiService.runQwenSingleEditWorkflow(currentItem.sourceImage, prompt);
+
+                setItems(prev => {
+                    const exists = prev.find(it => it.id === currentItem.id);
+                    if (!exists) return prev;
+                    return prev.map(it => it.id === currentItem.id ? { ...it, status: 'completed', resultImage: result.resultUrl } : it);
+                });
+
+                await handleSaveToGallery(result.resultUrl, 'batch_qwen');
+            } catch (err: any) {
+                console.error("[BATCH] Error:", err);
+                setItems(prev => prev.map(it => it.id === currentItem.id ? { ...it, status: 'error', error: err.message || 'Failed' } : it));
+            } finally {
+                await ComfyUiService.freeMemory();
+            }
+        }
 
         setIsGenerating(false);
         setCurrentIndex(-1);
