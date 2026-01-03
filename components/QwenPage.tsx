@@ -52,6 +52,28 @@ export const QwenPage: React.FC<QwenPageProps> = ({ initialData, onClearInitialD
     const [doubleImages, setDoubleImages] = useState<(string | null)[]>([null, null]);
     const [singleImage, setSingleImage] = useState<string | null>(null);
     const [prompt, setPrompt] = useState('replace silhouette in image2 with the girl from image1');
+    const [loraName, setLoraName] = useState('');
+    const [loraStrength, setLoraStrength] = useState(1.0);
+
+    const [isLoraModalOpen, setIsLoraModalOpen] = useState(false);
+    const [availableLoras, setAvailableLoras] = useState<string[]>([]);
+    const [comfyLoras, setComfyLoras] = useState<string[]>([]);
+    const [loraSearch, setLoraSearch] = useState('');
+
+    const fetchLoras = () => {
+        fetch('/list-loras').then(res => res.json()).then(data => {
+            if (Array.isArray(data)) setAvailableLoras(data);
+        }).catch(err => console.error("Failed to load LoRAs", err));
+
+        fetch('/comfy-api/object_info/LoraLoaderModelOnly').then(res => res.json()).then(data => {
+            const list = data?.LoraLoaderModelOnly?.input?.required?.lora_name?.[0];
+            if (list && Array.isArray(list)) setComfyLoras(list);
+        }).catch(() => { });
+    };
+
+    React.useEffect(() => {
+        if (isLoraModalOpen) fetchLoras();
+    }, [isLoraModalOpen]);
 
     React.useEffect(() => {
         if (initialData) {
@@ -144,21 +166,23 @@ export const QwenPage: React.FC<QwenPageProps> = ({ initialData, onClearInitialD
 
         setIsGenerating(true);
         setError(null);
+        const loraParams = loraName ? { name: loraName, strength: loraStrength } : undefined;
+
         try {
             if (mode === 'triple') {
-                const result = await ComfyUiService.runQwenEditWorkflow(images as string[], prompt);
+                const result = await ComfyUiService.runQwenEditWorkflow(images as string[], prompt, loraParams);
                 setResultUrls(result);
                 // Auto-save results to root Miscellaneous folder
                 handleSaveToGallery(result.resultUrl, 'qwen_result', false);
                 if (result.concatUrl) handleSaveToGallery(result.concatUrl, 'qwen_concat', false);
             } else if (mode === 'double') {
-                const result = await ComfyUiService.runQwenDoubleEditWorkflow(doubleImages as string[], prompt);
+                const result = await ComfyUiService.runQwenDoubleEditWorkflow(doubleImages as string[], prompt, loraParams);
                 setResultUrls(result);
                 // Auto-save results to root Miscellaneous folder
                 handleSaveToGallery(result.resultUrl, 'qwen_result', false);
                 if (result.concatUrl) handleSaveToGallery(result.concatUrl, 'qwen_concat', false);
             } else {
-                const result = await ComfyUiService.runQwenSingleEditWorkflow(singleImage as string, prompt);
+                const result = await ComfyUiService.runQwenSingleEditWorkflow(singleImage as string, prompt, loraParams);
                 setResultUrls(result);
                 // Auto-save result to root Miscellaneous folder
                 handleSaveToGallery(result.resultUrl, 'qwen_single', false);
@@ -193,7 +217,88 @@ export const QwenPage: React.FC<QwenPageProps> = ({ initialData, onClearInitialD
     };
 
     return (
-        <div className="bg-slate-950 text-slate-100 rounded-3xl p-8 border border-slate-800 shadow-2xl">
+        <div className="bg-slate-950 text-slate-100 rounded-3xl p-8 border border-slate-800 shadow-2xl relative">
+            {/* LoRA Selection Modal */}
+            {isLoraModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => {
+                    setIsLoraModalOpen(false);
+                    setLoraSearch('');
+                }}>
+                    <div className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-3xl p-6 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between">
+                            <div className="flex flex-col">
+                                <h3 className="text-lg font-bold text-white">Select LoRA Style</h3>
+                                {comfyLoras.length > 0 && (
+                                    <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">
+                                        Synced with ComfyUI: {comfyLoras.length} items
+                                    </span>
+                                )}
+                            </div>
+                            <button onClick={() => {
+                                setIsLoraModalOpen(false);
+                                setLoraSearch('');
+                            }} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                                <XMarkIcon className="w-5 h-5 text-slate-400" />
+                            </button>
+                        </div>
+
+                        <div className="relative">
+                            <input
+                                type="text"
+                                placeholder="Search LoRAs..."
+                                value={loraSearch}
+                                onChange={(e) => setLoraSearch(e.target.value)}
+                                autoFocus
+                                className="w-full bg-slate-950/50 border border-slate-700 rounded-xl p-3 pl-10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+                            />
+                            <svg className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </div>
+
+                        <div className="max-h-[50vh] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                            {availableLoras.filter(l => l.toLowerCase().includes(loraSearch.toLowerCase())).length === 0 &&
+                                comfyLoras.filter(l => l.toLowerCase().includes(loraSearch.toLowerCase())).length === 0 ? (
+                                <div className="text-center py-8 text-slate-500">No matching LoRAs found</div>
+                            ) : (
+                                Array.from(new Set([...availableLoras, ...comfyLoras]))
+                                    .filter(l => l.toLowerCase().includes(loraSearch.toLowerCase()))
+                                    .sort()
+                                    .map((lora) => (
+                                        <button
+                                            key={lora}
+                                            onClick={() => {
+                                                // Try to match with ComfyUI list for exact filename
+                                                let targetName = lora;
+                                                const match = comfyLoras.find(c =>
+                                                    c === lora ||
+                                                    c.toLowerCase() === lora.toLowerCase() ||
+                                                    c.includes(lora)
+                                                );
+                                                if (match) targetName = match;
+
+                                                setLoraName(targetName);
+                                                setIsLoraModalOpen(false);
+                                                setLoraSearch('');
+                                            }}
+                                            className={`w-full text-left p-3 rounded-xl hover:bg-cyan-600/20 hover:border-cyan-500/30 border transition-all group ${loraName === lora ? 'bg-cyan-600/10 border-cyan-500/50' : 'bg-slate-800/50 border-transparent'}`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <span className={`text-sm font-medium transition-colors truncate ${loraName === lora ? 'text-cyan-300' : 'text-slate-300 group-hover:text-cyan-300'}`}>
+                                                    {lora}
+                                                </span>
+                                                {loraName === lora && (
+                                                    <span className="text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded uppercase font-bold">Selected</span>
+                                                )}
+                                            </div>
+                                        </button>
+                                    ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="max-w-6xl mx-auto space-y-8">
                 <header className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-800 pb-6 gap-6">
                     <div>
@@ -334,6 +439,59 @@ export const QwenPage: React.FC<QwenPageProps> = ({ initialData, onClearInitialD
                                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-cyan-500 outline-none h-32 resize-none transition-all placeholder:text-slate-700 font-medium"
                                 placeholder="Describe the desired changes..."
                             />
+
+                            {/* LoRA Settings */}
+                            <div className="space-y-3 pt-4 border-t border-slate-800">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-xs font-bold uppercase text-slate-500 tracking-wider">LoRA Style</label>
+                                    {!loraName && (
+                                        <button
+                                            onClick={() => setIsLoraModalOpen(true)}
+                                            className="text-[10px] font-bold uppercase tracking-wider text-cyan-400 hover:text-cyan-300 transition-colors"
+                                        >
+                                            Browse Library
+                                        </button>
+                                    )}
+                                </div>
+
+                                {loraName ? (
+                                    <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-bold text-slate-200 truncate pr-4" title={loraName}>
+                                                {loraName}
+                                            </span>
+                                            <button
+                                                onClick={() => setLoraName('')}
+                                                className="text-slate-500 hover:text-red-400 transition-colors"
+                                            >
+                                                <XMarkIcon className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-[9px] uppercase font-bold text-slate-500 w-8">Str</span>
+                                            <input
+                                                type="range"
+                                                min="0.1"
+                                                max="2.0"
+                                                step="0.05"
+                                                value={loraStrength}
+                                                onChange={(e) => setLoraStrength(parseFloat(e.target.value))}
+                                                className="flex-1 accent-cyan-500 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                                            />
+                                            <span className="text-[9px] font-mono font-bold text-cyan-400 w-8 text-right">{loraStrength.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => setIsLoraModalOpen(true)}
+                                        className="w-full py-3 border border-dashed border-slate-700 rounded-xl text-slate-500 text-xs font-medium hover:border-cyan-500/50 hover:text-cyan-400 hover:bg-slate-900 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <SparklesIcon className="w-4 h-4" />
+                                        Select Style LoRA
+                                    </button>
+                                )}
+                            </div>
+
                             <button
                                 onClick={handleGenerate}
                                 disabled={isGenerating || (mode === 'triple' ? images.some(img => !img) : mode === 'double' ? doubleImages.some(img => !img) : !singleImage)}
@@ -344,7 +502,7 @@ export const QwenPage: React.FC<QwenPageProps> = ({ initialData, onClearInitialD
                             >
                                 {isGenerating ? (
                                     <>
-                                        <ArrowPathIcon className="w-6 h-6 animate-spin" /> Generating...
+                                        <ArrowPathIcon className="w-6 h-6 animate-spin" /> Batching...
                                     </>
                                 ) : (
                                     <>
