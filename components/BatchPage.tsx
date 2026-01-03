@@ -157,6 +157,9 @@ export const BatchPage: React.FC<BatchPageProps> = ({ onPreviewImage, onSendToTu
                 } catch (err: any) {
                     console.error("[BATCH] Error:", err);
                     setItems(prev => prev.map(it => it.id === currentItem.id ? { ...it, status: 'error', error: err.message || 'Failed' } : it));
+                } finally {
+                    // Force a memory cleanup on the server after each item (success or failure)
+                    await ComfyUiService.freeMemory();
                 }
             }
         };

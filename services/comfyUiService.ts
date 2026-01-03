@@ -144,7 +144,33 @@ export class ComfyUiService {
     private static async getHistory(prompt_id: string, isQwen: boolean = false): Promise<any> {
         const response = await fetch(`${this.API_BASE_URL}/history/${prompt_id}`);
         if (!response.ok) throw new Error("Failed to get history");
-        return await response.json();
+        const data = await response.json();
+
+        // Clean up history on the server to prevent memory build-up
+        try {
+            await fetch(`${this.API_BASE_URL}/history/${prompt_id}`, { method: 'DELETE' });
+        } catch (e) {
+            console.warn("Failed to delete history", e);
+        }
+
+        return data;
+    }
+
+    /**
+     * Explicitly ask ComfyUI to free up VRAM and unload models between batch items.
+     */
+    public static async freeMemory(): Promise<void> {
+        try {
+            // Standard ComfyUI free memory endpoint
+            await fetch(`${this.API_BASE_URL}/free`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ unload_models: true, free_memory: true })
+            });
+            console.log("[COMFY] Memory freed and models unloaded.");
+        } catch (e) {
+            console.warn("Failed to call /free memory endpoint", e);
+        }
     }
 
     public static async runQwenEditWorkflow(images: string[], promptText: string): Promise<{ resultUrl: string, concatUrl: string }> {
