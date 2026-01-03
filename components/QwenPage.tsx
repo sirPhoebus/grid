@@ -344,7 +344,7 @@ export const QwenPage: React.FC<QwenPageProps> = ({ initialData, onClearInitialD
                             >
                                 {isGenerating ? (
                                     <>
-                                        <ArrowPathIcon className="w-6 h-6 animate-spin" /> Batching...
+                                        <ArrowPathIcon className="w-6 h-6 animate-spin" /> Generating...
                                     </>
                                 ) : (
                                     <>

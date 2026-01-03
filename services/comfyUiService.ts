@@ -33,7 +33,27 @@ export class ComfyUiService {
         return this.getImage(imageInfo.filename, imageInfo.subfolder, imageInfo.type);
     }
 
+    /**
+     * Helper to fetch with a timeout to prevent absolute hangs especially during GPU stalls.
+     */
+    private static async fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 10000): Promise<Response> {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal
+            });
+            clearTimeout(id);
+            return response;
+        } catch (e) {
+            clearTimeout(id);
+            throw e;
+        }
+    }
+
     private static async uploadImage(imageInput: string, isQwen: boolean = false): Promise<string> {
+        console.log(`[COMFY] Uploading image...`);
         if (!imageInput) throw new Error("No image input provided for upload");
         let blob: Blob;
         if (imageInput.startsWith('blob:') || imageInput.startsWith('http') || imageInput.startsWith('/')) {
@@ -50,8 +70,6 @@ export class ComfyUiService {
                 const byteArray = new Uint8Array(byteNumbers);
                 blob = new Blob([byteArray], { type: 'image/png' });
             } catch (e) {
-                // If atob fails, it might be a malformed URL or base64
-                // Try fetching it as a last resort if it's a string that might be a local path
                 const response = await fetch(imageInput);
                 blob = await response.blob();
             }
@@ -60,124 +78,148 @@ export class ComfyUiService {
         const filename = `upload_${Date.now()}_${Math.floor(Math.random() * 1000)}.png`;
         formData.append('image', blob, filename);
         formData.append('overwrite', 'true');
-        const response = await fetch(`${this.API_BASE_URL}/upload/image`, {
+
+        const response = await this.fetchWithTimeout(`${this.API_BASE_URL}/upload/image`, {
             method: 'POST',
             body: formData
-        });
+        }, 30000); // 30s for upload
+
         if (!response.ok) throw new Error(`Failed to upload image: ${response.statusText}`);
         const data = await response.json();
+        console.log(`[COMFY] Upload successful: ${data.name}`);
         return data.name;
     }
 
     private static async queuePrompt(prompt: any, clientId?: string): Promise<{ prompt_id: string }> {
-        const response = await fetch(`${this.API_BASE_URL}/prompt`, {
+        console.log(`[COMFY] Queueing prompt...`);
+        const response = await this.fetchWithTimeout(`${this.API_BASE_URL}/prompt`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt, client_id: clientId || this.clientId })
-        });
-        if (!response.ok) throw new Error(`Failed to queue prompt: ${response.statusText}`);
-        return await response.json();
+        }, 15000); // 15s for queueing
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`[COMFY] Queue failure:`, errorText);
+            throw new Error(`Failed to queue prompt: ${response.statusText}. ${errorText.substring(0, 100)}`);
+        }
+        const data = await response.json();
+        console.log(`[COMFY] Prompt queued: ${data.prompt_id}`);
+        return data;
     }
 
-    private static async waitForExecution(prompt_id: string): Promise<void> {
+    private static async waitForExecution(prompt_id: string, customClientId?: string): Promise<void> {
+        console.log(`[COMFY] Monitoring execution for ${prompt_id}...`);
         return new Promise((resolve, reject) => {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const host = window.location.host;
-            const wsUrl = `${protocol}//${host}${this.API_BASE_URL}/ws?clientId=${this.clientId}`;
+            const clientId = customClientId || this.clientId;
+            const wsUrl = `${protocol}//${host}${this.API_BASE_URL}/ws?clientId=${clientId}`;
 
-            const socket = new WebSocket(wsUrl);
-            let checkTimer: any;
-            let timeoutTimer: any;
+            let socket: WebSocket | null = null;
+            let pollTimer: any = null;
+            let timeoutTimer: any = null;
+            let isFinished = false;
 
             const cleanup = () => {
-                clearInterval(checkTimer);
-                clearTimeout(timeoutTimer);
-                if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
-                    socket.close();
+                if (isFinished) return;
+                isFinished = true;
+                if (pollTimer) clearTimeout(pollTimer);
+                if (timeoutTimer) clearTimeout(timeoutTimer);
+                if (socket) {
+                    try { socket.close(); } catch (e) { }
+                    socket = null;
                 }
             };
 
-            // Polling fallback in case of WS race conditions or connection delays
-            checkTimer = setInterval(async () => {
+            const poll = async () => {
+                if (isFinished) return;
                 try {
-                    const history = await this.getHistory(prompt_id);
+                    // Short timeout for history check to avoid hanging on GPU stalls
+                    const history = await this.getHistory(prompt_id, false, 5000);
                     if (history && history[prompt_id]) {
-                        // Prompt is already finished in history
+                        console.log(`[COMFY] Prompt ${prompt_id} found in history.`);
                         cleanup();
                         resolve();
+                        return;
                     }
                 } catch (e) {
-                    // Ignore transient history errors
+                    // Ignore transient errors
                 }
-            }, 2000);
 
-            socket.onmessage = (event) => {
-                if (typeof event.data === 'string') {
-                    const message = JSON.parse(event.data);
-                    if (message.type === 'executing') {
-                        const data = message.data;
-                        if (data.node === null && data.prompt_id === prompt_id) {
+                if (!isFinished) {
+                    pollTimer = setTimeout(poll, 3000);
+                }
+            };
+
+            try {
+                socket = new WebSocket(wsUrl);
+                socket.onmessage = (event) => {
+                    if (isFinished) return;
+                    if (typeof event.data === 'string') {
+                        const message = JSON.parse(event.data);
+                        if (message.type === 'executing') {
+                            const data = message.data;
+                            if (data.node === null && data.prompt_id === prompt_id) {
+                                console.log(`[COMFY] Execution finished (WS).`);
+                                cleanup();
+                                resolve();
+                            }
+                        }
+                        if (message.type === 'execution_error' && message.data.prompt_id === prompt_id) {
                             cleanup();
-                            resolve();
+                            reject(new Error(`ComfyUI Error: ${JSON.stringify(message.data.exception_message)}`));
                         }
                     }
-                    if (message.type === 'execution_error' && message.data.prompt_id === prompt_id) {
-                        cleanup();
-                        reject(new Error(`ComfyUI Error: ${JSON.stringify(message.data.exception_message)}`));
-                    }
-                }
-            };
+                };
+            } catch (e) {
+                console.warn(`[COMFY] WS failed.`, e);
+            }
 
-            socket.onerror = (error) => {
-                // If socket fails, the interval polling will still catch the result from history
-                console.warn("WebSocket monitoring failed, falling back to polling.", error);
-            };
+            pollTimer = setTimeout(poll, 2000);
 
-            // 15 minute timeout for very large operations
             timeoutTimer = setTimeout(() => {
+                if (isFinished) return;
                 cleanup();
-                reject(new Error("ComfyUI Timeout (900s)"));
+                console.error(`[COMFY] Timeout for ${prompt_id}`);
+                reject(new Error(`ComfyUI Timeout (900s) for prompt ${prompt_id}`));
             }, 900000);
         });
     }
 
-    private static async getHistory(prompt_id: string, isQwen: boolean = false): Promise<any> {
-        const response = await fetch(`${this.API_BASE_URL}/history/${prompt_id}`);
+    private static async getHistory(prompt_id: string, isQwen: boolean = false, timeoutMs: number = 10000): Promise<any> {
+        const response = await this.fetchWithTimeout(`${this.API_BASE_URL}/history/${prompt_id}`, {}, timeoutMs);
         if (!response.ok) throw new Error("Failed to get history");
         return await response.json();
     }
 
-    /**
-     * Clean up history on the server to prevent memory build-up.
-     * Uses correct ComfyUI POST /history API.
-     */
     public static async clearHistory(prompt_id: string): Promise<void> {
         try {
-            await fetch(`${this.API_BASE_URL}/history`, {
+            await this.fetchWithTimeout(`${this.API_BASE_URL}/history`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ delete: [prompt_id] })
-            });
-            console.log(`[COMFY] History cleared for ${prompt_id}`);
+            }, 5000);
+            console.log(`[COMFY] History cleared.`);
         } catch (e) {
-            console.warn("Failed to clear history", e);
+            console.warn("History clear failed", e);
         }
     }
 
     /**
-     * Explicitly ask ComfyUI to free up VRAM and unload models between batch items.
+     * Explicitly ask ComfyUI to free up VRAM.
+     * unloadModels=true is aggressive and can trigger driver resets if called too fast.
      */
-    public static async freeMemory(): Promise<void> {
+    public static async freeMemory(unloadModels: boolean = false): Promise<void> {
         try {
-            // Standard ComfyUI free memory endpoint
-            await fetch(`${this.API_BASE_URL}/free`, {
+            await this.fetchWithTimeout(`${this.API_BASE_URL}/free`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ unload_models: true, free_memory: true })
-            });
-            console.log("[COMFY] Memory freed and models unloaded.");
+                body: JSON.stringify({ unload_models: unloadModels, free_memory: true })
+            }, 10000);
+            console.log(`[COMFY] Memory freed (unloadModels=${unloadModels}).`);
         } catch (e) {
-            console.warn("Failed to call /free memory endpoint", e);
+            console.warn("Memory free call failed", e);
         }
     }
 
@@ -604,8 +646,8 @@ export class ComfyUiService {
     }
 
     static async runZImageWorkflow(params: ZImageParams): Promise<{ imageUrl: string }> {
-        let workflow: any;
         const engine = params.engine || 'z-image';
+        let workflow: any;
 
         if (engine === 'qwen') {
             workflow = this.getQwenImageWorkflow(params);
@@ -619,32 +661,24 @@ export class ComfyUiService {
         }
 
         const clientId = 'zimage-' + Math.random().toString(36).substring(7);
-        const saveNodeId = engine === 'qwen' ? '60' : '9';
+        const { prompt_id } = await this.queuePrompt(workflow, clientId);
 
-        return new Promise((resolve, reject) => {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const host = window.location.host;
-            const wsUrl = `${protocol}//${host}${this.API_BASE_URL}/ws?clientId=${clientId}`;
-            const ws = new WebSocket(wsUrl);
-            ws.onopen = async () => {
-                try {
-                    await fetch(`${this.API_BASE_URL}/prompt`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: workflow, client_id: clientId }) });
-                } catch (err) { reject(err); }
-            };
-            ws.onmessage = async (event) => {
-                const message = JSON.parse(event.data);
-                if (message.type === 'executed' && message.data.node === saveNodeId) {
-                    const output = message.data.output;
-                    if (output && output.images) {
-                        const image = output.images[0];
-                        const imageUrl = this.getImage(image.filename, image.subfolder, image.type);
-                        ws.close();
-                        resolve({ imageUrl });
-                    }
-                }
-            };
-            ws.onerror = (err) => { reject(err); ws.close(); };
-        });
+        await this.waitForExecution(prompt_id, clientId);
+
+        const history = await this.getHistory(prompt_id);
+        const saveNodeId = engine === 'qwen' ? '60' : '9';
+        const output = history[prompt_id].outputs[saveNodeId];
+
+        if (!output || !output.images || output.images.length === 0) {
+            throw new Error(`No output images found for node ${saveNodeId}`);
+        }
+
+        const image = output.images[0];
+        const imageUrl = this.getImage(image.filename, image.subfolder, image.type);
+
+        await this.clearHistory(prompt_id);
+
+        return { imageUrl };
     }
 
     private static getWorkflow(inputFilename: string) {
