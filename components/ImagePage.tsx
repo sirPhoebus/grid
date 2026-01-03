@@ -170,7 +170,20 @@ export const Image: React.FC<ImageProps> = ({ onSendToTurbo, onSendToUpscale, on
                         image: result.imageUrl,
                         filename: `zimage_${timestamp}.png`,
                         folder: '.',
-                        targetDir: 'z_image'
+                        targetDir: 'z_image',
+                        metadata: {
+                            prompt: params.prompt,
+                            negative_prompt: params.negative_prompt,
+                            width: params.width,
+                            height: params.height,
+                            steps: params.steps,
+                            cfg: params.cfg,
+                            engine: params.engine || 'z-image',
+                            sampler_name: params.sampler_name,
+                            scheduler: params.scheduler,
+                            loras: params.loras,
+                            timestamp
+                        }
                     })
                 });
             } catch (saveErr) {

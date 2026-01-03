@@ -179,7 +179,7 @@ export const QwenPage: React.FC<QwenPageProps> = ({ initialData, onClearInitialD
                 body: JSON.stringify({
                     image: imageUrl,
                     filename: filename,
-                    folder: 'Miscellaneous',
+                    folder: '.',
                     targetDir: 'qwen_gallery'
                 })
             });

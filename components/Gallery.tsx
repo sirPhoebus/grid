@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 
 interface MediaFolder {
     name: string;
-    files: { url: string; duration?: string; time?: string }[];
+    files: { url: string; duration?: string; time?: string; prompt?: string; metadata?: any }[];
 }
 
 interface MediaData {
@@ -21,9 +21,10 @@ interface GalleryProps {
     onSendToTurbo?: (data: { imageUrl: string, prompt: string }) => void;
     onSendToUpscale?: (imageUrl: string, prompt: string) => void;
     onSendToQwen?: (data: { imageUrl: string, prompt: string, targetMode?: 'single' | 'double' | 'triple' }) => void;
+    onSendToPrompt?: (data: { imageUrl: string, prompt: string, metadata?: any }) => void;
 }
 
-export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale, onSendToQwen }) => {
+export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale, onSendToQwen, onSendToPrompt }) => {
     const [data, setData] = useState<MediaData>({
         sliced_img: [], upscale: [], individual_upscale: [], turbowan: [], stitched: [], z_image: [], inverse: [], qwen_gallery: []
     });
@@ -79,8 +80,9 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
             newIndex = currentIndex < allFiles.length - 1 ? currentIndex + 1 : 0;
         }
 
-        setSelectedMedia(allFiles[newIndex].url);
-        setIsMediaVideo(allFiles[newIndex].isVideo);
+        const newFile = allFiles[newIndex];
+        setSelectedMedia(newFile.url);
+        setIsMediaVideo(newFile.isVideo);
     };
 
     // ESC and Arrow key handlers for navigation
@@ -515,7 +517,7 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    onSendToQwen?.({ imageUrl: file, prompt: "From Gallery" });
+                                                                    onSendToQwen?.({ imageUrl: file, prompt: fileObj.prompt || "From Gallery" });
                                                                 }}
                                                                 className="bg-cyan-600/20 p-2 rounded-lg text-cyan-400 hover:bg-cyan-600 hover:text-white transition-all backdrop-blur-md border border-cyan-500/30"
                                                                 title="Edit with Qwen"
@@ -525,6 +527,19 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                                                                 </svg>
                                                             </button>
                                                         )}
+
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onSendToPrompt?.({ imageUrl: file, prompt: fileObj.prompt || "No prompt available", metadata: fileObj.metadata });
+                                                            }}
+                                                            className="bg-amber-600/20 p-2 rounded-lg text-amber-400 hover:bg-amber-600 hover:text-white transition-all backdrop-blur-md border border-amber-500/30"
+                                                            title="View Prompt"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                            </svg>
+                                                        </button>
                                                     </div>
                                                 )}
                                             </div>
@@ -635,6 +650,56 @@ export const Gallery: React.FC<GalleryProps> = ({ onSendToTurbo, onSendToUpscale
                                     Edit with Qwen
                                 </button>
                             )}
+
+                            <button
+                                onClick={() => {
+                                    // Need to find the file object to get metadata
+                                    let foundFile = null;
+                                    for (const folder of activeData) {
+                                        const f = folder.files.find(f => f.url === selectedMedia);
+                                        if (f) {
+                                            foundFile = f;
+                                            break;
+                                        }
+                                    }
+                                    onSendToPrompt?.({
+                                        imageUrl: selectedMedia!,
+                                        prompt: foundFile?.prompt || "No prompt available",
+                                        metadata: foundFile?.metadata
+                                    });
+                                    setSelectedMedia(null);
+                                }}
+                                className="flex items-center gap-3 px-6 py-4 bg-amber-600/10 hover:bg-amber-600 text-amber-400 hover:text-white rounded-xl font-bold text-sm backdrop-blur-md border border-amber-600/50 transition-all shadow-xl active:scale-95 w-full justify-center group"
+                            >
+                                <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                View Metadata
+                            </button>
+
+                            <button
+                                onClick={async () => {
+                                    // Need to find the folder name for this file
+                                    let folderName = "";
+                                    for (const folder of activeData) {
+                                        if (folder.files.find(f => f.url === selectedMedia)) {
+                                            folderName = folder.name;
+                                            break;
+                                        }
+                                    }
+                                    if (folderName) {
+                                        const fileName = selectedMedia!.split('/').pop()!;
+                                        await handleDeleteFile(folderName, fileName);
+                                        setSelectedMedia(null);
+                                    }
+                                }}
+                                className="flex items-center gap-3 px-6 py-4 bg-red-600/10 hover:bg-red-600 text-red-400 hover:text-white rounded-xl font-bold text-sm backdrop-blur-md border border-red-600/50 transition-all shadow-xl active:scale-95 w-full justify-center group mt-4 border-t border-red-500/20 pt-6"
+                            >
+                                <svg className="w-5 h-5 group-hover:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1-1v3M4 7h16" />
+                                </svg>
+                                Delete Item
+                            </button>
                         </div>
                     </div>
                 </div>

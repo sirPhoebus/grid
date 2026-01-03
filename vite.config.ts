@@ -51,6 +51,67 @@ export default defineConfig(({ mode }) => {
       {
         name: 'save-sliced-images',
         configureServer(server) {
+          const extractMetadataFromPng = (filePath: string) => {
+            try {
+              if (!filePath.toLowerCase().endsWith('.png')) return null;
+              const buffer = fs.readFileSync(filePath);
+              let offset = 8;
+              const results: any = {};
+
+              while (offset < buffer.length - 12) {
+                const length = buffer.readUInt32BE(offset);
+                const type = buffer.toString('utf8', offset + 4, offset + 8);
+
+                if (type === 'tEXt' || type === 'iTXt') {
+                  const data = buffer.slice(offset + 8, offset + 8 + length);
+                  if (type === 'tEXt') {
+                    const parts = data.toString('utf8').split('\0');
+                    results[parts[0]] = parts[1];
+                  } else {
+                    let nullCount = 0;
+                    let textStart = 0;
+                    for (let i = 0; i < data.length; i++) {
+                      if (data[i] === 0) {
+                        nullCount++;
+                        if (nullCount === 5) { textStart = i + 1; break; }
+                      }
+                    }
+                    if (textStart > 0) {
+                      const keywordEnd = data.indexOf(0);
+                      const key = data.toString('utf8', 0, keywordEnd);
+                      results[key] = data.toString('utf8', textStart);
+                    }
+                  }
+                }
+                offset += length + 12;
+                if (type === 'IEND') break;
+              }
+
+              // Post-process ComfyUI prompt to extract text
+              if (results.prompt) {
+                try {
+                  const promptGraph = JSON.parse(results.prompt);
+                  // Look for CLIPTextEncode nodes
+                  for (const id in promptGraph) {
+                    const node = promptGraph[id];
+                    if (node.class_type === 'CLIPTextEncode' && node.inputs?.text) {
+                      // Try to avoid negative prompts if we can guess
+                      if (node._meta?.title?.toLowerCase().includes('negative')) continue;
+                      if (node.inputs.text.length > 5) {
+                        results.extracted_prompt = node.inputs.text;
+                        break;
+                      }
+                    }
+                  }
+                } catch (e) { }
+              }
+
+              return results;
+            } catch (e) {
+              return null;
+            }
+          };
+
           // Middleware to list media folders
           server.middlewares.use('/list-media', (req, res, next) => {
             if (req.method === 'GET') {
@@ -76,9 +137,25 @@ export default defineConfig(({ mode }) => {
                             const fullPath = path.join(folderPath, f);
                             let duration = undefined;
                             let time = undefined;
+                            let prompt = undefined;
+                            let metadata = undefined;
                             try {
                               const stats = fs.statSync(fullPath);
                               time = stats.mtime.toISOString();
+
+                              // Check for metadata file
+                              const metaPath = fullPath.replace(/\.[^/.]+$/, "") + ".json";
+                              if (fs.existsSync(metaPath)) {
+                                const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+                                metadata = meta;
+                                prompt = meta.prompt;
+                              } else if (f.toLowerCase().endsWith('.png')) {
+                                const pngMeta = extractMetadataFromPng(fullPath);
+                                if (pngMeta) {
+                                  metadata = pngMeta;
+                                  prompt = pngMeta.extracted_prompt || pngMeta.prompt;
+                                }
+                              }
                             } catch (e) { }
 
                             if (/\.(mp4|webm)$/i.test(f)) {
@@ -88,7 +165,7 @@ export default defineConfig(({ mode }) => {
                                 if (out) duration = parseFloat(out).toFixed(1) + 's';
                               } catch (e) { }
                             }
-                            return { url: relativePath, duration, time };
+                            return { url: relativePath, duration, time, prompt, metadata };
                           });
                         return {
                           name: dirent.name,
@@ -104,9 +181,25 @@ export default defineConfig(({ mode }) => {
                         const fullPath = path.join(typeDir, dirent.name);
                         let duration = undefined;
                         let time = undefined;
+                        let prompt = undefined;
+                        let metadata = undefined;
                         try {
                           const stats = fs.statSync(fullPath);
                           time = stats.mtime.toISOString();
+
+                          // Check for metadata file
+                          const metaPath = fullPath.replace(/\.[^/.]+$/, "") + ".json";
+                          if (fs.existsSync(metaPath)) {
+                            const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+                            metadata = meta;
+                            prompt = meta.prompt;
+                          } else if (dirent.name.toLowerCase().endsWith('.png')) {
+                            const pngMeta = extractMetadataFromPng(fullPath);
+                            if (pngMeta) {
+                              metadata = pngMeta;
+                              prompt = pngMeta.extracted_prompt || pngMeta.prompt;
+                            }
+                          }
                         } catch (e) { }
 
                         if (/\.(mp4|webm)$/i.test(dirent.name)) {
@@ -116,7 +209,7 @@ export default defineConfig(({ mode }) => {
                             if (out) duration = parseFloat(out).toFixed(1) + 's';
                           } catch (e) { }
                         }
-                        return { url: relativePath, duration, time };
+                        return { url: relativePath, duration, time, prompt, metadata };
                       });
 
                     if (rootFiles.length > 0) {
@@ -398,14 +491,33 @@ export default defineConfig(({ mode }) => {
                   }
 
                   if (fs.existsSync(targetPath)) {
-                    if (fs.statSync(targetPath).isDirectory()) {
+                    const stats = fs.statSync(targetPath);
+                    if (stats.isDirectory()) {
                       fs.rmSync(targetPath, { recursive: true, force: true });
                     } else {
                       fs.unlinkSync(targetPath);
+                      // Also delete associated metadata file if it exists
+                      const metaPath = targetPath.replace(/\.[^/.]+$/, "") + ".json";
+                      if (fs.existsSync(metaPath)) {
+                        fs.unlinkSync(metaPath);
+                        console.log(`[DELETE] Also deleted metadata: ${metaPath}`);
+                      }
                     }
                     res.statusCode = 200;
                     res.end('deleted');
                   } else {
+                    // Fallback: If it's a 'Miscellaneous' folder but the user meant the literal folder 'Miscellaneous'
+                    if (name === 'Miscellaneous' && file) {
+                      const literalPath = path.resolve(process.cwd(), serverConfig.paths.mediaDir, safeType, 'Miscellaneous', file.replace(/[^a-zA-Z0-9_\-\.]/g, '_'));
+                      if (fs.existsSync(literalPath)) {
+                        fs.unlinkSync(literalPath);
+                        const metaPath = literalPath.replace(/\.[^/.]+$/, "") + ".json";
+                        if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath);
+                        res.statusCode = 200;
+                        res.end('deleted');
+                        return;
+                      }
+                    }
                     res.statusCode = 404;
                     res.end('Not found');
                   }
@@ -473,7 +585,7 @@ export default defineConfig(({ mode }) => {
               req.on('end', async () => {
                 try {
                   const body = JSON.parse(Buffer.concat(chunks).toString());
-                  const { image, filename, folder, targetDir } = body;
+                  const { image, filename, folder, targetDir, metadata } = body;
 
                   // Use provided folder or default
                   const safeFolder = folder ? folder.replace(/[^a-zA-Z0-9_\-\.]/g, '_') : 'default';
@@ -523,6 +635,14 @@ export default defineConfig(({ mode }) => {
                     const base64Data = image.replace(/^data:\w+\/[\w\-]+;base64,/, "");
                     fs.writeFileSync(targetPath, base64Data, 'base64');
                   }
+
+                  // Save metadata if provided
+                  if (metadata) {
+                    const metaPath = targetPath.replace(/\.[^/.]+$/, "") + ".json";
+                    fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2));
+                    console.log(`[SAVE] Saved metadata to ${metaPath}`);
+                  }
+
                   console.log(`[SAVE] Successfully saved to ${targetPath}`);
 
                   res.statusCode = 200;

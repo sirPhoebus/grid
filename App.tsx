@@ -14,13 +14,15 @@ import { FrameExtractor } from './components/FrameExtractor';
 import { VideoReverser } from './components/VideoReverser';
 import { Help } from './components/Help';
 import { QwenPage } from './components/QwenPage';
+import { PromptPage } from './components/PromptPage';
+import { BatchPage } from './components/BatchPage';
 
 
 // Components
 const Header: React.FC<{
   onOpenSettings: () => void;
-  currentView: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit';
-  onNavigate: (view: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit') => void;
+  currentView: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit' | 'prompt-view' | 'batch-edit';
+  onNavigate: (view: 'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit' | 'prompt-view' | 'batch-edit') => void;
 
 }> = ({ onOpenSettings, currentView, onNavigate }) => (
   <header className="py-6 px-6 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
@@ -31,7 +33,7 @@ const Header: React.FC<{
       >
         <div className="w-10 h-10 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:scale-110 transition-transform">
           <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
         </div>
         <div>
@@ -50,15 +52,26 @@ const Header: React.FC<{
         >
           Image
         </button>
-        <button
-          onClick={() => onNavigate('qwen-edit')}
-          className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'qwen-edit'
-            ? 'bg-cyan-600 text-white shadow-lg'
-            : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-            }`}
-        >
-          Qwen Pro
-        </button>
+        <div className="flex bg-slate-900/50 rounded-full mx-1 p-0.5 border border-white/5">
+          <button
+            onClick={() => onNavigate('qwen-edit')}
+            className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'qwen-edit'
+              ? 'bg-cyan-600 text-white shadow-lg'
+              : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+              }`}
+          >
+            Qwen
+          </button>
+          <button
+            onClick={() => onNavigate('batch-edit')}
+            className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${currentView === 'batch-edit'
+              ? 'bg-emerald-600 text-white shadow-lg'
+              : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+              }`}
+          >
+            Batch
+          </button>
+        </div>
 
         <button
           onClick={() => onNavigate('upscale')}
@@ -199,9 +212,10 @@ const MediaOverlay: React.FC<{ media: OverlayMedia; onClose: () => void }> = ({ 
 };
 
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit'>('z-image');
+  const [currentView, setCurrentView] = useState<'home' | 'gallery' | 'upscale' | 'turbo-wan' | 'stitcher' | 'z-image' | 'extractor' | 'reverse' | 'help' | 'qwen-edit' | 'prompt-view' | 'batch-edit'>('z-image');
   const [turboHandover, setTurboHandover] = useState<{ imageUrl: string, prompt: string } | null>(null);
   const [qwenHandover, setQwenHandover] = useState<{ imageUrl: string, prompt: string, targetMode?: 'single' | 'double' | 'triple' } | null>(null);
+  const [promptHandover, setPromptHandover] = useState<{ imageUrl: string, prompt: string, metadata?: any } | null>(null);
   const [hasKey, setHasKey] = useState<boolean>(false);
   const [individualState, setIndividualState] = useState<{
     file: File | null;
@@ -993,9 +1007,56 @@ const App: React.FC = () => {
               setCurrentView('upscale');
             }}
           />
+        ) : currentView === 'batch-edit' ? (
+          <BatchPage
+            onPreviewImage={(url) => setOverlayMedia({ url, type: 'image' })}
+            onSendToTurbo={(data) => {
+              setTurboHandover(data);
+              setCurrentView('turbo-wan');
+            }}
+            onSendToUpscale={(imageUrl, prompt) => {
+              setIndividualState({
+                file: null,
+                originalPreview: imageUrl,
+                upscaledPreview: null,
+                isProcessing: false,
+                error: null,
+                prompt: prompt || ""
+              });
+              setCurrentView('upscale');
+            }}
+          />
         ) : currentView === 'gallery' ? (
 
           <Gallery
+            onSendToTurbo={(data) => {
+              setTurboHandover(data);
+              setCurrentView('turbo-wan');
+            }}
+            onSendToUpscale={(imageUrl, prompt) => {
+              setIndividualState({
+                file: null,
+                originalPreview: imageUrl,
+                upscaledPreview: null,
+                isProcessing: false,
+                error: null,
+                prompt: prompt || ""
+              });
+              setCurrentView('upscale');
+            }}
+            onSendToQwen={(data) => {
+              setQwenHandover(data);
+              setCurrentView('qwen-edit');
+            }}
+            onSendToPrompt={(data) => {
+              setPromptHandover(data);
+              setCurrentView('prompt-view');
+            }}
+          />
+        ) : currentView === 'prompt-view' ? (
+          <PromptPage
+            data={promptHandover}
+            onBack={() => setCurrentView('gallery')}
             onSendToTurbo={(data) => {
               setTurboHandover(data);
               setCurrentView('turbo-wan');
