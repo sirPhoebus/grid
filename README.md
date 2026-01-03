@@ -39,14 +39,17 @@ Powered by **Gemini**, **ComfyUI**, **Veo 3.1**, and **Kling AI**, Alcove Pro is
 - **Single Image Mode**: Professional AI image editing with a single reference image (1536px high-fidelity)
 - **Triple Image Mode**: Complex image composition using three source images and a prompt
 - **Side-by-Side Comparison**: Automatic generation of comparison views for triple composition
-- **Unified Backend**: Integrated directly into your local ComfyUI instance via `/comfy-api`
+- **Batch Processing**: Bulk process multiple images with a single prompt using the new "Batch Pro" pipeline
+- **Queue Management**: Real-time management of the batch queue with the ability to add/remove items during processing
 
 ### 🖼️ **Unified Gallery**
-- Centralized media browser for all generated content
-- Categories: Sliced Images, Upscaled, TurboWan, Stitched, Z-Images, Reversed Videos
+- **Smart Metadata Extraction**: Natively read ComfyUI prompts and workflows directly from PNG files (no JSON sidecar required)
+- **Multi-Select Mode**: Select and delete multiple files or entire series simultaneously
+- **Unified Deletion**: One-click deletion from grid view or directly from the fullscreen preview modal
+- **Automated Cleanup**: Deleting a media file automatically removes its associated metadata JSON to prevent clutter
+- **Recent/Miscellaneous**: Automatically organizes root-level files into a "Recent" category for easy access
 - Fullscreen preview with keyboard shortcuts (ESC to close)
-- Direct actions: "Send to Upscale" and "Send to TurboWan"
-- Smart aspect ratio display
+- Direct actions: "Send to Upscale", "Send to TurboWan", and "Send to Qwen"
 
 ### 📝 **Global Prompt Library**
 - Save and manage prompts across all tools
@@ -161,6 +164,7 @@ grid/
 │   ├── Gallery.tsx         # Media browser
 │   ├── Help.tsx            # Integrated manual and guides
 │   ├── QwenPage.tsx        # Qwen Pro image editing
+│   ├── BatchPage.tsx       # Bulk Qwen processing
 │   └── PromptLibrary.tsx   # Prompt management
 ├── services/
 │   └── comfyUiService.ts   # Unified ComfyUI & Qwen workflow manager
@@ -222,7 +226,14 @@ The Vite dev server includes custom middleware for file operations:
 
 ## 📜 Version History
 
-### v1.5 (Latest)
+### v1.6 (Latest)
+- **Qwen Batch Pro**: New bulk processing pipeline for Qwen edits with dynamic queue management
+- **PNG Metadata Engine**: Native extraction of ComfyUI prompts and workflows from embedded PNG chunks
+- **Unified Deletion Suite**: Added "Delete" buttons to modal previews and automated metadata file cleanup
+- **Gallery Multi-Select**: New selection mode for bulk deletion and cleaner media organization
+- **Miscellaneous Logic**: Root-level media is now intelligently mapped to a "Recent" folder for better UX
+
+### v1.5
 - **Qwen Edit Pro**: New professional image editing suite with Single and Triple image modes
 - **Unified Backend**: All ComfyUI and Qwen workflows now routed through a single `/comfy-api` proxy
 - **Premium UI**: Responsive sub-navigation and zero-dependency inline SVGs for Qwen Pro

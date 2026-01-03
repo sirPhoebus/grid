@@ -73,27 +73,28 @@ export const BatchPage: React.FC<BatchPageProps> = ({ onPreviewImage, onSendToTu
 
         const newItems: BatchItem[] = [];
         Array.from(files).forEach((file: File, index) => {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const sourceImage = event.target?.result as string;
-                setItems(prev => [...prev, {
-                    id: `${Date.now()}-${index}`,
-                    sourceImage,
-                    status: 'pending',
-                    filename: file.name
-                }]);
-            };
-            reader.readAsDataURL(file);
+            const sourceImage = URL.createObjectURL(file);
+            setItems(prev => [...prev, {
+                id: `${Date.now()}-${index}`,
+                sourceImage,
+                status: 'pending',
+                filename: file.name
+            }]);
         });
     };
 
     const clearBatch = () => {
         if (isGenerating) return;
+        items.forEach(item => {
+            if (item.sourceImage.startsWith('blob:')) URL.revokeObjectURL(item.sourceImage);
+        });
         setItems([]);
         setCurrentIndex(-1);
     };
 
     const removeItem = (id: string) => {
+        const item = items.find(i => i.id === id);
+        if (item?.sourceImage.startsWith('blob:')) URL.revokeObjectURL(item.sourceImage);
         setItems(prev => prev.filter(item => item.id !== id));
     };
 
@@ -124,37 +125,47 @@ export const BatchPage: React.FC<BatchPageProps> = ({ onPreviewImage, onSendToTu
         if (items.length === 0 || isGenerating) return;
 
         setIsGenerating(true);
+        console.log(`[BATCH] Starting batch.`);
 
-        while (true) {
-            const currentItems = itemsRef.current;
-            const nextItem = currentItems.find(it => it.status === 'pending' || it.status === 'error');
+        // Recursive processor to handle the queue one by one
+        const processNext = async () => {
+            // Get the latest items state using functional update trick or we can just use the prop if we were in a sub-effect, 
+            // but here we'll just find the next one from the current items array and continue.
+            // Since this is a single execution flow, we can just iterate.
 
-            if (!nextItem) break;
+            for (let i = 0; i < items.length; i++) {
+                // We fetch the latest item state from a closure-safe way if possible, 
+                // but for a simple loop, let's just use what we have and check if it still exists in the state.
+                const currentItem = items[i];
+                if (currentItem.status === 'completed') continue;
 
-            const itemId = nextItem.id;
-            setCurrentIndex(itemsRef.current.findIndex(it => it.id === itemId));
+                setCurrentIndex(i);
 
-            setItems(prev => prev.map(it => it.id === itemId ? { ...it, status: 'processing' } : it));
+                // Update UI to processing
+                setItems(prev => prev.map(it => it.id === currentItem.id ? { ...it, status: 'processing' } : it));
 
-            try {
-                const result = await ComfyUiService.runQwenSingleEditWorkflow(nextItem.sourceImage, prompt);
+                try {
+                    const result = await ComfyUiService.runQwenSingleEditWorkflow(currentItem.sourceImage, prompt);
 
-                // If item was removed during processing, just skip
-                const itemStillExists = itemsRef.current.find(it => it.id === itemId);
-                if (itemStillExists) {
-                    setItems(prev => prev.map(it => it.id === itemId ? { ...it, status: 'completed', resultImage: result.resultUrl } : it));
+                    setItems(prev => {
+                        const exists = prev.find(it => it.id === currentItem.id);
+                        if (!exists) return prev;
+                        return prev.map(it => it.id === currentItem.id ? { ...it, status: 'completed', resultImage: result.resultUrl } : it);
+                    });
+
                     await handleSaveToGallery(result.resultUrl, 'batch_qwen');
-                }
-            } catch (err: any) {
-                const itemStillExists = itemsRef.current.find(it => it.id === itemId);
-                if (itemStillExists) {
-                    setItems(prev => prev.map(it => it.id === itemId ? { ...it, status: 'error', error: err.message || 'Failed' } : it));
+                } catch (err: any) {
+                    console.error("[BATCH] Error:", err);
+                    setItems(prev => prev.map(it => it.id === currentItem.id ? { ...it, status: 'error', error: err.message || 'Failed' } : it));
                 }
             }
-        }
+        };
+
+        await processNext();
 
         setIsGenerating(false);
         setCurrentIndex(-1);
+        console.log(`[BATCH] Batch finished.`);
     };
 
     const completedCount = items.filter(i => i.status === 'completed').length;

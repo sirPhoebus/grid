@@ -69,36 +69,75 @@ export class ComfyUiService {
         return data.name;
     }
 
-    private static async queuePrompt(prompt: any, isQwen: boolean = false): Promise<{ prompt_id: string }> {
+    private static async queuePrompt(prompt: any, clientId?: string): Promise<{ prompt_id: string }> {
         const response = await fetch(`${this.API_BASE_URL}/prompt`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt, client_id: this.clientId })
+            body: JSON.stringify({ prompt, client_id: clientId || this.clientId })
         });
         if (!response.ok) throw new Error(`Failed to queue prompt: ${response.statusText}`);
         return await response.json();
     }
 
-    private static async waitForExecution(prompt_id: string, isQwen: boolean = false): Promise<void> {
+    private static async waitForExecution(prompt_id: string): Promise<void> {
         return new Promise((resolve, reject) => {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const host = window.location.host;
             const wsUrl = `${protocol}//${host}${this.API_BASE_URL}/ws?clientId=${this.clientId}`;
+
             const socket = new WebSocket(wsUrl);
+            let checkTimer: any;
+            let timeoutTimer: any;
+
+            const cleanup = () => {
+                clearInterval(checkTimer);
+                clearTimeout(timeoutTimer);
+                if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+                    socket.close();
+                }
+            };
+
+            // Polling fallback in case of WS race conditions or connection delays
+            checkTimer = setInterval(async () => {
+                try {
+                    const history = await this.getHistory(prompt_id);
+                    if (history && history[prompt_id]) {
+                        // Prompt is already finished in history
+                        cleanup();
+                        resolve();
+                    }
+                } catch (e) {
+                    // Ignore transient history errors
+                }
+            }, 2000);
+
             socket.onmessage = (event) => {
                 if (typeof event.data === 'string') {
                     const message = JSON.parse(event.data);
                     if (message.type === 'executing') {
                         const data = message.data;
                         if (data.node === null && data.prompt_id === prompt_id) {
-                            socket.close();
+                            cleanup();
                             resolve();
                         }
                     }
+                    if (message.type === 'execution_error' && message.data.prompt_id === prompt_id) {
+                        cleanup();
+                        reject(new Error(`ComfyUI Error: ${JSON.stringify(message.data.exception_message)}`));
+                    }
                 }
             };
-            socket.onerror = (error) => { console.error("WebSocket Error", error); };
-            setTimeout(() => { if (socket.readyState !== WebSocket.CLOSED) socket.close(); }, 300000);
+
+            socket.onerror = (error) => {
+                // If socket fails, the interval polling will still catch the result from history
+                console.warn("WebSocket monitoring failed, falling back to polling.", error);
+            };
+
+            // 15 minute timeout for very large operations
+            timeoutTimer = setTimeout(() => {
+                cleanup();
+                reject(new Error("ComfyUI Timeout (900s)"));
+            }, 900000);
         });
     }
 
@@ -111,8 +150,8 @@ export class ComfyUiService {
     public static async runQwenEditWorkflow(images: string[], promptText: string): Promise<{ resultUrl: string, concatUrl: string }> {
         const filenames = await Promise.all(images.map(img => this.uploadImage(img, true)));
         const workflow = this.getQwenEditWorkflow(filenames, promptText);
-        const { prompt_id } = await this.queuePrompt(workflow, true);
-        await this.waitForExecution(prompt_id, true);
+        const { prompt_id } = await this.queuePrompt(workflow);
+        await this.waitForExecution(prompt_id);
         const history = await this.getHistory(prompt_id, true);
         const outputs = history[prompt_id].outputs;
         const resultOutput = outputs['105'];
@@ -125,8 +164,8 @@ export class ComfyUiService {
     public static async runQwenDoubleEditWorkflow(images: string[], promptText: string): Promise<{ resultUrl: string, concatUrl: string }> {
         const filenames = await Promise.all(images.map(img => this.uploadImage(img, true)));
         const workflow = this.getQwenDoubleEditWorkflow(filenames, promptText);
-        const { prompt_id } = await this.queuePrompt(workflow, true);
-        await this.waitForExecution(prompt_id, true);
+        const { prompt_id } = await this.queuePrompt(workflow);
+        await this.waitForExecution(prompt_id);
         const history = await this.getHistory(prompt_id, true);
         const outputs = history[prompt_id].outputs;
         const resultOutput = outputs['105'];
@@ -139,8 +178,8 @@ export class ComfyUiService {
     public static async runQwenSingleEditWorkflow(image: string, promptText: string): Promise<{ resultUrl: string }> {
         const filename = await this.uploadImage(image, true);
         const workflow = this.getQwenSingleEditWorkflow(filename, promptText);
-        const { prompt_id } = await this.queuePrompt(workflow, true);
-        await this.waitForExecution(prompt_id, true);
+        const { prompt_id } = await this.queuePrompt(workflow);
+        await this.waitForExecution(prompt_id);
         const history = await this.getHistory(prompt_id, true);
         const outputs = history[prompt_id].outputs;
         const resultOutput = outputs['105'];
@@ -153,6 +192,10 @@ export class ComfyUiService {
         const prompt = workflowType === 'turbowan'
             ? this.getTurboWanWorkflow(filename, promptText, aspectRatio)
             : this.getQwenVideoWorkflow(filename, promptText, aspectRatio);
+
+        const { exec } = await import('child_process');
+        const { promisify } = await import('util');
+        const execPromise = promisify(exec);
 
         const { prompt_id } = await this.queuePrompt(prompt);
         await this.waitForExecution(prompt_id);
